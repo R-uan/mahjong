@@ -1,17 +1,21 @@
+use std::io::Error;
+
+pub enum PacketType {
+    Ping = 0x00,
+    Reconnection = 0x02,
+    Authentication = 0x01,
+    GameAction = 0x03,
+}
+
 pub struct Packet {
-    pub length: u16,
-    pub checksum: u16,
-    pub packet_type: u8,
-    pub payload: Box<[u8]>,
+    pub packet_id: i32,
+    pub packet_size: i32,
+    pub packet_body: Box<[u8]>,
+    pub packet_type: PacketType,
 }
 
 impl Packet {
-    pub fn from_bytes(bytes: &[u8]) -> Packet {
-        Packet {
-            length: 0,
-            checksum: 0,
-            packet_type: 0,
-            payload: Box::new([0; 0]),
-        }
+    pub fn from_bytes(bytes: &[u8]) -> Result<Packet, Error> {
+        todo!()
     }
 }

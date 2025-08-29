@@ -24,7 +24,7 @@ impl ClientManager {
 
     // Handles the initial client state (unauthenticated) and awaits for authentication
     // Create a Client struct when successfully authenticated
-    pub async fn handle_client(self: Arc<Self>, mut stream: TcpStream, addr: SocketAddr) {
+    pub async fn accept(&self, mut stream: TcpStream, addr: SocketAddr) {
         let mut buffer = [0; 1024];
         let mut attempts = 0;
         while attempts < 5 {
@@ -37,15 +37,16 @@ impl ClientManager {
                 }
             };
 
-            let packet = Packet::from_bytes(&buffer[..read_bytes]);
-            if let Some(player) = self.authenticate_client(&packet).await {
-                let mut client_poll = self.authenticated_clients.write().await;
-                let client = Client::new(stream, addr, player, Arc::clone(&self.protocol)).await;
-                client_poll.insert(client.uuid.clone(), client);
-                return;
-            } else {
-                attempts += 1;
+            if let Ok(packet) = Packet::from_bytes(&buffer[..read_bytes]) {
+                if let Some(player) = self.authenticate_client(&packet).await {
+                    let mut client_poll = self.authenticated_clients.write().await;
+                    let client = Client::new(addr, stream, player, self.protocol.clone()).await;
+                    client_poll.insert(client.uuid.clone(), client);
+                    return;
+                }
             }
+
+            attempts += 1;
         }
     }
 
@@ -64,8 +65,8 @@ pub struct Client {
     pub addr: SocketAddr,
     pub player: Arc<Player>,
     pub protocol: Arc<Protocol>,
-    pub read_half: OwnedReadHalf,
-    pub write_half: OwnedWriteHalf,
+    pub read_half: Arc<RwLock<OwnedReadHalf>>,
+    pub write_half: Arc<RwLock<OwnedWriteHalf>>,
 }
 
 impl Client {
@@ -82,8 +83,26 @@ impl Client {
             addr,
             player,
             protocol,
-            read_half: read,
-            write_half: write,
+            read_half: Arc::new(RwLock::new(read)),
+            write_half: Arc::new(RwLock::new(write)),
+        }
+    }
+
+    pub async fn listen(self: Arc<Self>) {
+        let mut buffer = [0; 4096];
+        let mut read_stream = self.read_half.write().await;
+        loop {
+            let bytes_read = match read_stream.read(&mut buffer).await {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(_) => break,
+            };
+
+            if let Ok(packet) = Packet::from_bytes(&buffer[..bytes_read]) {
+                tokio::spawn(async move {
+                    self.protocol.handle_packet(self.clone(), packet).await;
+                });
+            }
         }
     }
 }

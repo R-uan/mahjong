@@ -1,6 +1,8 @@
-use std::{any::Any, sync::Arc};
-
-use crate::{game::{game_state::GameManager, player::Player}}
+use crate::{
+    game::{game_state::GameManager, player::Player},
+    network::client::Client,
+};
+use std::sync::Arc;
 
 pub struct Protocol {
     game_manager: Arc<GameManager>,
@@ -11,6 +13,12 @@ impl Protocol {
         Self { game_manager: gm }
     }
 
+    pub async fn handle_packet(&self, client: Arc<Client>, packet: Packet) {
+        todo!()
+    }
+
+    async fn handle_game_action(&self) {}
+
     pub async fn assign_player(&self, id: &str, username: &str) -> Option<Arc<Player>> {
         match self.game_manager.get_free_seat().await {
             Some(seat) => {
@@ -19,7 +27,7 @@ impl Protocol {
                 *seat.alias.write().await = username.to_string();
                 return Some(seat);
             }
-            None => None
+            None => None,
         }
     }
 }

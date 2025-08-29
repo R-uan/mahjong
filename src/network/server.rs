@@ -35,8 +35,16 @@ impl Server {
     pub async fn init(self: Arc<Self>) {
         while *self.running.read().await {
             match self.socket.accept().await {
-                Ok(client) => {}
-                Err(error) => {}
+                Ok((stream, addr)) => {
+                    tokio::spawn({
+                        let server = self.clone();
+                        async move {
+                            server.client_manager.accept(stream, addr).await;
+                        }
+                    });
+                    continue;
+                }
+                Err(_) => {}
             }
         }
     }
