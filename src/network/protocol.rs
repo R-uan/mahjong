@@ -1,6 +1,7 @@
 use crate::{
     game::{game_state::GameManager, player::Player},
     network::client::Client,
+    protocol::packet::Packet,
 };
 use std::sync::Arc;
 

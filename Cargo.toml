@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 reqwest = "0.12.23"
 serde_cbor = "0.11.2"
+thiserror = "2.0.16"
 tokio = { version = "1.47.1", features = ["full"] }

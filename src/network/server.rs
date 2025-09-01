@@ -6,7 +6,6 @@ use std::{net::Ipv4Addr, sync::Arc};
 use tokio::{net::TcpListener, sync::RwLock};
 
 pub struct Server {
-    pub port: u16,
     pub socket: Arc<TcpListener>,
     pub running: Arc<RwLock<bool>>,
     pub game_manager: Arc<GameManager>,
@@ -22,7 +21,6 @@ impl Server {
         let client_manager = ClientManager::new_manager(Arc::new(protocol));
 
         let server = Server {
-            port,
             game_manager,
             socket: Arc::new(listener),
             running: Arc::new(RwLock::new(false)),
@@ -32,7 +30,7 @@ impl Server {
         return Ok(server);
     }
 
-    pub async fn init(self: Arc<Self>) {
+    pub async fn start(self: Arc<Self>) {
         while *self.running.read().await {
             match self.socket.accept().await {
                 Ok((stream, addr)) => {
