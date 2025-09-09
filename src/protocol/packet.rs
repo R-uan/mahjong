@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::protocol::errors::ProtocolError;
 
 #[derive(Debug, PartialEq)]
@@ -66,6 +64,10 @@ impl Packet {
             packet_size: (8 + 2 + body.len()) as i32,
             packet_body: body.to_vec().into_boxed_slice(),
         }
+    }
+
+    pub fn wrap(&self) -> Box<[u8]> {
+        todo!()
     }
 }
 

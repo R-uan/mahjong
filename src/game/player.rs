@@ -4,7 +4,7 @@ use tokio::sync::RwLock;
 
 pub struct Player {
     pub view: View,
-    pub id: Arc<RwLock<String>>,
+    pub id: Arc<String>,
     pub alias: Arc<RwLock<String>>,
     pub connected: Arc<RwLock<bool>>,
 }
@@ -21,7 +21,7 @@ impl Player {
         Player {
             view: View::default(),
             connected: Arc::new(RwLock::new(false)),
-            id: Arc::new(RwLock::new("".to_string())),
+            id: Arc::new("".to_string()),
             alias: Arc::new(RwLock::new("".to_string())),
         }
     }

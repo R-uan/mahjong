@@ -23,3 +23,4 @@ GameManager -> Server -> Protocol
   - Client has 5 attempts
   - If authenticated, Client is created
   
+- packet handling

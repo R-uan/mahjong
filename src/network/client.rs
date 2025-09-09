@@ -4,29 +4,34 @@ use crate::protocol::packet::{Packet, PacketType};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::io::AsyncReadExt;
+use std::time::Duration;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::RwLock;
+use tokio::time::sleep;
 
 pub struct ClientManager {
     pub protocol: Arc<Protocol>,
-    pub authenticated_clients: Arc<RwLock<HashMap<String, Arc<Client>>>>,
+    pub client_pool: Arc<RwLock<HashMap<String, Arc<Client>>>>,
 }
 
 impl ClientManager {
     pub fn new_manager(protocol: Arc<Protocol>) -> Self {
         Self {
             protocol,
-            authenticated_clients: Arc::new(RwLock::new(HashMap::default())),
+            client_pool: Arc::new(RwLock::new(HashMap::default())),
         }
     }
 
-    // Handles the initial client state (unauthenticated) and awaits for authentication
-    // Create a Client struct when successfully authenticated
+    // Handles the initial client state (unauthenticated)
+    // Client has five attempts to send an authentication packet.
+    // Create a Client struct when/if successfully authenticated.
+    // Store client and run the main listen loop for the definitive Client.
     pub async fn accept(&self, mut stream: TcpStream, addr: SocketAddr) {
-        let mut buffer = [0; 1024];
         let mut attempts = 0;
+        let mut buffer = [0; 1024];
+
         while attempts < 5 {
             let read_bytes = match stream.read(&mut buffer).await {
                 Ok(0) => break,
@@ -40,16 +45,28 @@ impl ClientManager {
             if let Ok(packet) = Packet::from_bytes(&buffer[..read_bytes]) {
                 if packet.packet_type == PacketType::Authentication {
                     if let Some(player) = self.authenticate_client(&packet).await {
-                        let mut client_poll = self.authenticated_clients.write().await;
+                        let id = player.id.to_string();
+                        let mut client_poll = self.client_pool.write().await;
                         let client = Client::new(addr, stream, player, self.protocol.clone()).await;
+
                         tokio::spawn({
                             let client_clone = Arc::clone(&client);
                             async move {
-                                client_clone.listen().await;
+                                client_clone.connect().await;
                             }
                         });
-                        client_poll.insert(client.uuid.clone(), client);
+
+                        client_poll.insert(id, client);
                         return;
+                    }
+                } else if packet.packet_type == PacketType::Reconnection {
+                    if let Some(player) = self.authenticate_client(&packet).await {
+                        let client_guard = self.client_pool.read().await;
+                        if let Some(client) = client_guard.get(&*player.id) {
+                            let client_clone = Arc::clone(&client);
+                            client_clone.reconnect(stream, addr).await;
+                            return;
+                        }
                     }
                 }
             }
@@ -69,10 +86,10 @@ impl ClientManager {
 }
 
 pub struct Client {
-    pub uuid: String,
-    pub addr: SocketAddr,
     pub player: Arc<Player>,
     pub protocol: Arc<Protocol>,
+    pub listening: Arc<RwLock<bool>>,
+    pub addr: Arc<RwLock<SocketAddr>>,
     pub read_half: Arc<RwLock<OwnedReadHalf>>,
     pub write_half: Arc<RwLock<OwnedWriteHalf>>,
 }
@@ -84,26 +101,31 @@ impl Client {
         player: Arc<Player>,
         protocol: Arc<Protocol>,
     ) -> Arc<Self> {
-        let uuid = player.id.read().await.clone();
         let (read, write) = stream.into_split();
         Arc::new(Self {
-            uuid,
-            addr,
             player,
             protocol,
+            addr: Arc::new(RwLock::new(addr)),
             read_half: Arc::new(RwLock::new(read)),
+            listening: Arc::new(RwLock::new(false)),
             write_half: Arc::new(RwLock::new(write)),
         })
     }
 
-    pub async fn listen(self: Arc<Self>) {
+    // Main client loop to listen to the pooling of the incoming packets.
+    // If no bytes are read the connection is closed.
+    // Tries to parse bytes into a Packet struct. No penalty for invalid packets.
+    // Calls Protocol to handle each valid packet in a tokio async task.
+    pub async fn connect(self: Arc<Self>) {
+        *self.listening.write().await = true;
+
         let mut buffer = [0; 4096];
-        let mut read_stream = self.read_half.write().await;
-        loop {
+        while *self.listening.read().await {
+            let mut read_stream = self.read_half.write().await;
             let bytes_read = match read_stream.read(&mut buffer).await {
                 Ok(0) => break,
                 Ok(n) => n,
-                Err(_) => break,
+                Err(_) => continue,
             };
 
             if let Ok(packet) = Packet::from_bytes(&buffer[..bytes_read]) {
@@ -115,6 +137,43 @@ impl Client {
                     }
                 });
             }
+        }
+
+        *self.listening.write().await = false;
+    }
+
+    pub async fn reconnect(self: Arc<Self>, stream: TcpStream, addr: SocketAddr) {
+        let (read, write) = stream.into_split();
+
+        *self.addr.write().await = addr;
+        *self.read_half.write().await = read;
+        *self.write_half.write().await = write;
+
+        tokio::spawn({
+            let client = self.clone();
+            async move {
+                client.connect().await;
+            }
+        });
+    }
+
+    pub async fn disconnect(self: Arc<Self>) {
+        *self.listening.write().await = false;
+        *self.player.connected.write().await = false;
+    }
+
+    pub async fn send_packet(self: Arc<Self>, packet: Packet) {
+        let mut tries = 0;
+        let bytes = packet.wrap();
+        while tries < 30 {
+            let mut write_guard = self.write_half.write().await;
+            if let Err(_) = write_guard.write(&bytes).await {
+                sleep(Duration::from_secs(2)).await;
+                tries += 1;
+                continue;
+            }
+
+            break;
         }
     }
 }
