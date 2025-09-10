@@ -1,6 +1,6 @@
 use crate::game::game_state::GameManager;
 use crate::network::client::ClientManager;
-use crate::network::protocol::Protocol;
+use crate::protocol::protocol::Protocol;
 use std::io::Error;
 use std::{net::Ipv4Addr, sync::Arc};
 use tokio::{net::TcpListener, sync::RwLock};

@@ -1,6 +1,7 @@
 use crate::game::player::Player;
-use crate::network::protocol::Protocol;
 use crate::protocol::packet::{Packet, PacketType};
+use crate::protocol::protocol::Protocol;
+use crate::utils::models::AuthResponse;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -44,25 +45,26 @@ impl ClientManager {
 
             if let Ok(packet) = Packet::from_bytes(&buffer[..read_bytes]) {
                 if packet.packet_type == PacketType::Authentication {
-                    if let Some(player) = self.authenticate_client(&packet).await {
-                        let id = player.id.to_string();
+                    if let Some((player, auth)) = self.authenticate_client(&packet).await {
                         let mut client_poll = self.client_pool.write().await;
+                        *player.connected.write().await = true;
                         let client = Client::new(addr, stream, player, self.protocol.clone()).await;
-
+                        
                         tokio::spawn({
                             let client_clone = Arc::clone(&client);
                             async move {
                                 client_clone.connect().await;
                             }
                         });
-
+                        
+                        let id = auth.id.to_string();
                         client_poll.insert(id, client);
                         return;
                     }
                 } else if packet.packet_type == PacketType::Reconnection {
-                    if let Some(player) = self.authenticate_client(&packet).await {
+                    if let Some((_, auth)) = self.authenticate_client(&packet).await {
                         let client_guard = self.client_pool.read().await;
-                        if let Some(client) = client_guard.get(&*player.id) {
+                        if let Some(client) = client_guard.get(&auth.id) {
                             let client_clone = Arc::clone(&client);
                             client_clone.reconnect(stream, addr).await;
                             return;
@@ -76,12 +78,13 @@ impl ClientManager {
     }
 
     // Calls into the player auth server to authenticate player.
-    pub async fn authenticate_client(&self, _: &Packet) -> Option<Arc<Player>> {
-        let player = self
-            .protocol
-            .assign_player("placeholder", "placeholder")
-            .await;
-        return player;
+    pub async fn authenticate_client(&self, _: &Packet) -> Option<(Arc<Player>, AuthResponse)> {
+        let auth = AuthResponse::default();
+        if let Some(player) = self.protocol.assign_player(&auth).await {
+            return Some((player, auth));
+        };
+
+        return None;
     }
 }
 
@@ -118,7 +121,8 @@ impl Client {
     // Calls Protocol to handle each valid packet in a tokio async task.
     pub async fn connect(self: Arc<Self>) {
         *self.listening.write().await = true;
-
+        *self.player.connected.write().await = true;
+        
         let mut buffer = [0; 4096];
         while *self.listening.read().await {
             let mut read_stream = self.read_half.write().await;
@@ -139,7 +143,7 @@ impl Client {
             }
         }
 
-        *self.listening.write().await = false;
+        self.disconnect().await;
     }
 
     pub async fn reconnect(self: Arc<Self>, stream: TcpStream, addr: SocketAddr) {

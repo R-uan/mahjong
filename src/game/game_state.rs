@@ -1,49 +1,71 @@
 use std::sync::Arc;
 
-use crate::game::player::Player;
+use crate::game::{game_action::GameAction, player::{Player, Seat}};
 
 pub struct GameState {
-    pub south_seat: Arc<Player>,
-    pub north_seat: Arc<Player>,
-    pub east_seat: Arc<Player>,
-    pub west_seat: Arc<Player>,
+    pub player1: Arc<Player>,
+    pub player2: Arc<Player>,
+    pub player3: Arc<Player>,
+    pub player4: Arc<Player>,
     pub tile_wall: String,
 }
 
 impl GameState {
     pub fn start_game() -> Self {
         Self {
-            south_seat: Arc::new(Player::new()),
-            north_seat: Arc::new(Player::new()),
-            east_seat: Arc::new(Player::new()),
-            west_seat: Arc::new(Player::new()),
             tile_wall: "".to_string(),
+            player1: Arc::new(Player::new(Seat::East)),
+            player2: Arc::new(Player::new(Seat::West)),
+            player3: Arc::new(Player::new(Seat::North)),
+            player4: Arc::new(Player::new(Seat::South)),
         }
     }
 }
 
 pub struct GameManager {
+    match_id: String,
     state: GameState,
 }
 
 impl GameManager {
     pub fn new_manager() -> GameManager {
         Self {
+            match_id: String::new(),
             state: GameState::start_game(),
         }
     }
 
+    fn apply_actions(&self, action: GameAction) {
+        todo!()
+    }
+
+    fn reasign_seats(&self) {
+        todo!()
+    }
+
     pub async fn get_free_seat(&self) -> Option<Arc<Player>> {
-        if !*self.state.south_seat.connected.read().await {
-            return Some(Arc::clone(&self.state.south_seat));
-        } else if !*self.state.north_seat.connected.read().await {
-            return Some(Arc::clone(&self.state.north_seat));
-        } else if !*self.state.east_seat.connected.read().await {
-            return Some(Arc::clone(&self.state.east_seat));
-        } else if !*self.state.west_seat.connected.read().await {
-            return Some(Arc::clone(&self.state.west_seat));
+        if !*self.state.player1.connected.read().await {
+            return Some(Arc::clone(&self.state.player1));
+        } else if !*self.state.player2.connected.read().await {
+            return Some(Arc::clone(&self.state.player2));
+        } else if !*self.state.player3.connected.read().await {
+            return Some(Arc::clone(&self.state.player3));
+        } else if !*self.state.player4.connected.read().await {
+            return Some(Arc::clone(&self.state.player4));
         } else {
             return None;
+        }
+    }
+
+    pub async fn assign_player(&self, id: &str, username: &str) -> Option<Arc<Player>> {
+        match self.get_free_seat().await {
+            Some(seat) => {
+                *seat.connected.write().await = true;
+                *seat.id.write().await = id.to_string();
+                *seat.alias.write().await = username.to_string();
+                return Some(seat);
+            }
+            None => None,
         }
     }
 }

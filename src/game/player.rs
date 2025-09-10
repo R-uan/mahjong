@@ -2,9 +2,17 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
+pub enum Seat {
+    North,
+    South,
+    East,
+    West,
+}
+
 pub struct Player {
-    pub view: View,
-    pub id: Arc<String>,
+    pub view: Arc<View>,
+    pub id: Arc<RwLock<String>>,
+    pub seat: Arc<RwLock<Seat>>,
     pub alias: Arc<RwLock<String>>,
     pub connected: Arc<RwLock<bool>>,
 }
@@ -17,12 +25,13 @@ pub struct View {
 }
 
 impl Player {
-    pub fn new() -> Player {
+    pub fn new(seat: Seat) -> Player {
         Player {
-            view: View::default(),
+            view: Arc::new(View::default()),
+            seat: Arc::new(RwLock::new(seat)),
             connected: Arc::new(RwLock::new(false)),
-            id: Arc::new("".to_string()),
-            alias: Arc::new(RwLock::new("".to_string())),
+            id: Arc::new(RwLock::new(String::new())),
+            alias: Arc::new(RwLock::new(String::new())),
         }
     }
 }
