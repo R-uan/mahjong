@@ -1,23 +1,28 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::game::{game_action::GameAction, player::{Player, Seat}};
+use tokio::sync::RwLock;
+
+use crate::game::{
+    errors::GameError,
+    game_action::GameAction,
+    player::{Player, Seat},
+    tiles::Tile,
+};
 
 pub struct GameState {
-    pub player1: Arc<Player>,
-    pub player2: Arc<Player>,
-    pub player3: Arc<Player>,
-    pub player4: Arc<Player>,
     pub tile_wall: String,
+    pub turn: Arc<RwLock<i32>>,
+    pub last_discard: Arc<RwLock<Option<Tile>>>,
+    pub player_pool: Arc<RwLock<HashMap<Seat, Arc<Player>>>>,
 }
 
 impl GameState {
     pub fn start_game() -> Self {
         Self {
             tile_wall: "".to_string(),
-            player1: Arc::new(Player::new(Seat::East)),
-            player2: Arc::new(Player::new(Seat::West)),
-            player3: Arc::new(Player::new(Seat::North)),
-            player4: Arc::new(Player::new(Seat::South)),
+            turn: Arc::new(RwLock::new(0)),
+            last_discard: Arc::new(RwLock::new(None)),
+            player_pool: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -25,14 +30,26 @@ impl GameState {
 pub struct GameManager {
     match_id: String,
     state: GameState,
+    current_seat: Arc<RwLock<Seat>>,
 }
 
 impl GameManager {
     pub fn new_manager() -> GameManager {
+        let state = GameState::start_game();
         Self {
+            state,
             match_id: String::new(),
-            state: GameState::start_game(),
+            current_seat: Arc::new(RwLock::new(Seat::East)),
         }
+    }
+
+    pub async fn next_player(&self) {
+        let next = match *self.current_seat.read().await {
+            Seat::East => Seat::North,
+            Seat::North => Seat::West,
+            Seat::West => Seat::South,
+            Seat::South => Seat::East,
+        };
     }
 
     fn apply_actions(&self, action: GameAction) {
@@ -43,29 +60,30 @@ impl GameManager {
         todo!()
     }
 
-    pub async fn get_free_seat(&self) -> Option<Arc<Player>> {
-        if !*self.state.player1.connected.read().await {
-            return Some(Arc::clone(&self.state.player1));
-        } else if !*self.state.player2.connected.read().await {
-            return Some(Arc::clone(&self.state.player2));
-        } else if !*self.state.player3.connected.read().await {
-            return Some(Arc::clone(&self.state.player3));
-        } else if !*self.state.player4.connected.read().await {
-            return Some(Arc::clone(&self.state.player4));
+    pub async fn get_free_seat(&self) -> Option<Seat> {
+        let player_pool_guard = self.state.player_pool.read().await;
+        return if player_pool_guard.get(&Seat::East).is_none() {
+            Some(Seat::East)
+        } else if player_pool_guard.get(&Seat::North).is_none() {
+            Some(Seat::North)
+        } else if player_pool_guard.get(&Seat::West).is_none() {
+            Some(Seat::West)
+        } else if player_pool_guard.get(&Seat::South).is_none() {
+            Some(Seat::South)
         } else {
-            return None;
-        }
+            None
+        };
     }
 
-    pub async fn assign_player(&self, id: &str, username: &str) -> Option<Arc<Player>> {
+    pub async fn assign_player(&self, id: &str, alias: &str) -> Result<Arc<Player>, GameError> {
         match self.get_free_seat().await {
+            None => Err(GameError::NoAvailableSeats),
             Some(seat) => {
-                *seat.connected.write().await = true;
-                *seat.id.write().await = id.to_string();
-                *seat.alias.write().await = username.to_string();
-                return Some(seat);
+                let player = Arc::new(Player::new(seat.clone(), id, alias));
+                let mut player_pool_guard = self.state.player_pool.write().await;
+                player_pool_guard.insert(seat, player.clone());
+                return Ok(player);
             }
-            None => None,
         }
     }
 }

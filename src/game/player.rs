@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Seat {
-    North,
-    South,
-    East,
-    West,
+    North = 0,
+    South = 1,
+    East = 2,
+    West = 3,
 }
 
 pub struct Player {
@@ -25,13 +26,13 @@ pub struct View {
 }
 
 impl Player {
-    pub fn new(seat: Seat) -> Player {
+    pub fn new(seat: Seat, id: &str, alias: &str) -> Player {
         Player {
             view: Arc::new(View::default()),
             seat: Arc::new(RwLock::new(seat)),
             connected: Arc::new(RwLock::new(false)),
-            id: Arc::new(RwLock::new(String::new())),
-            alias: Arc::new(RwLock::new(String::new())),
+            id: Arc::new(RwLock::new(id.to_string())),
+            alias: Arc::new(RwLock::new(alias.to_string())),
         }
     }
 }
