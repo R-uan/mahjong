@@ -1,4 +1,4 @@
-use crate::game::{errors::GameErrors, tiles::Tile};
+use crate::game::{errors::GameError, tiles::Tile};
 
 pub enum Action {
     DISCARD = 0,
@@ -25,9 +25,8 @@ pub struct GameAction {
 }
 
 impl GameAction {
-    fn from_bytes(b: Box<[u8]>) -> Result<GameAction, GameErrors> {
+    fn from_bytes(b: Box<[u8]>) -> Result<GameAction, GameError> {
         let action_bytes = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
-        let action = Action::from(action_bytes as i32).map_or_else(default, f);
         todo!()
     }
 }

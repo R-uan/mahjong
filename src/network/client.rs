@@ -1,8 +1,10 @@
-use crate::game::errors::GameError;
 use crate::game::player::Player;
 use crate::protocol::packet::{Packet, PacketType};
 use crate::protocol::protocol::Protocol;
+use crate::utils::errors::Error;
+use crate::utils::log_manager::LogLevel;
 use crate::utils::models::AuthResponse;
+use reqwest::StatusCode;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -46,9 +48,16 @@ impl ClientManager {
 
             if let Ok(packet) = Packet::from_bytes(&buffer[..read_bytes]) {
                 if packet.packet_type == PacketType::Authentication {
-                    if let Ok((player, auth)) = self.authenticate_client(&packet).await {
+                    if let Ok((player, auth)) = self.authenticate(&packet).await {
                         let mut client_poll = self.client_pool.write().await;
                         *player.connected.write().await = true;
+
+                        self.protocol.log.send(
+                            LogLevel::Info,
+                            &format!("{addr} authenticated as {}", &player.alias.read().await),
+                            "Client Manager",
+                        );
+
                         let client = Client::new(addr, stream, player, self.protocol.clone()).await;
 
                         tokio::spawn({
@@ -63,7 +72,7 @@ impl ClientManager {
                         return;
                     }
                 } else if packet.packet_type == PacketType::Reconnection {
-                    if let Ok((_, auth)) = self.authenticate_client(&packet).await {
+                    if let Ok((_, auth)) = self.authenticate(&packet).await {
                         let client_guard = self.client_pool.read().await;
                         if let Some(client) = client_guard.get(&auth.id) {
                             let client_clone = Arc::clone(&client);
@@ -79,13 +88,25 @@ impl ClientManager {
     }
 
     // Calls into the player auth server to authenticate player.
-    pub async fn authenticate_client(
-        &self,
-        _: &Packet,
-    ) -> Result<(Arc<Player>, AuthResponse), GameError> {
-        let auth = AuthResponse::default();
-        let player = self.protocol.connect_player(&auth).await?;
-        return Ok((player, auth));
+    pub async fn authenticate(&self, _: &Packet) -> Result<(Arc<Player>, AuthResponse), Error> {
+        match reqwest::get("").await {
+            Ok(response) => match response.status() {
+                StatusCode::OK => {
+                    let auth = response
+                        .json::<AuthResponse>()
+                        .await
+                        .map_err(|_| Error::AuthenticationFailed(6))?;
+                    let player = self
+                        .protocol
+                        .connect_player(&auth)
+                        .await
+                        .map_err(|_| Error::MatchAlreadyFull)?;
+                    return Ok((player, auth));
+                }
+                _ => Err(Error::AuthenticationFailed(5)),
+            },
+            Err(_) => Err(Error::AuthenticationFailed(5)),
+        }
     }
 }
 

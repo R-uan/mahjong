@@ -2,11 +2,14 @@ use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::RwLock;
 
-use crate::game::{
-    errors::GameError,
-    game_action::GameAction,
-    player::{Player, Seat},
-    tiles::Tile,
+use crate::{
+    game::{
+        errors::GameError,
+        game_action::GameAction,
+        player::{Player, Seat},
+        tiles::Tile,
+    },
+    utils::log_manager::LogManager,
 };
 
 pub struct GameState {
@@ -30,21 +33,22 @@ impl GameState {
 pub struct GameManager {
     match_id: String,
     state: GameState,
+    log: Arc<LogManager>,
     current_seat: Arc<RwLock<Seat>>,
 }
 
 impl GameManager {
-    pub fn new_manager() -> GameManager {
-        let state = GameState::start_game();
+    pub fn new_instance(lm: Arc<LogManager>) -> GameManager {
         Self {
-            state,
+            log: lm,
             match_id: String::new(),
+            state: GameState::start_game(),
             current_seat: Arc::new(RwLock::new(Seat::East)),
         }
     }
 
     pub async fn next_player(&self) {
-        let next = match *self.current_seat.read().await {
+        *self.current_seat.write().await = match *self.current_seat.read().await {
             Seat::East => Seat::North,
             Seat::North => Seat::West,
             Seat::West => Seat::South,

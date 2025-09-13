@@ -3,22 +3,21 @@ use tokio::sync::RwLock;
 use crate::{
     game::{errors::GameError, game_state::GameManager, player::Player},
     network::client::Client,
-    protocol::{
-        errors::ProtocolError,
-        packet::{Packet, PacketType},
-    },
-    utils::models::AuthResponse,
+    protocol::packet::{Packet, PacketType},
+    utils::{log_manager::LogManager, models::AuthResponse},
 };
 use std::sync::Arc;
 
 pub struct Protocol {
+    pub log: Arc<LogManager>,
     global_id: Arc<RwLock<i32>>,
     game_manager: Arc<GameManager>,
 }
 
 impl Protocol {
-    pub fn new(gm: Arc<GameManager>) -> Self {
+    pub fn new(gm: Arc<GameManager>, lm: Arc<LogManager>) -> Self {
         Self {
+            log: lm,
             game_manager: gm,
             global_id: Arc::new(RwLock::new(0)),
         }
@@ -29,7 +28,7 @@ impl Protocol {
             PacketType::Ping => Some(self.handle_ping(&packet)),
             PacketType::Reconnection => None,
             PacketType::Authentication => None,
-            PacketType::GameAction => self.handle_game_action(&packet).await,
+            PacketType::GameAction => self.handle_game_action(client.clone(), &packet).await,
         };
 
         if let Some(packet) = response {
@@ -37,7 +36,7 @@ impl Protocol {
         }
     }
 
-    async fn handle_game_action(&self, packet: &Packet) -> Option<Packet> {
+    async fn handle_game_action(&self, c: Arc<Client>, p: &Packet) -> Option<Packet> {
         todo!()
     }
 

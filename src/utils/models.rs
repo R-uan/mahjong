@@ -1,6 +1,8 @@
-#[derive(Default)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
 pub struct AuthResponse {
     pub id: String,
     pub alias: String,
-    pub rank: Option<String>
+    pub rank: Option<String>,
 }
