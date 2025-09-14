@@ -15,8 +15,9 @@ pub struct Server {
 
 impl Server {
     pub async fn create_instance(port: u16) -> Result<Server, Error> {
+        let running = Arc::new(RwLock::new(false));
         let host = Ipv4Addr::new(127, 0, 0, 1);
-        let lm = Arc::new(LogManager::new_instance());
+        let lm = Arc::new(LogManager::new_instance(port + 1, running.clone()).await?);
         let listener = TcpListener::bind((host, port)).await?;
         let game_manager = Arc::new(GameManager::new_instance(Arc::clone(&lm)));
         let protocol = Protocol::new(Arc::clone(&game_manager), Arc::clone(&lm));
