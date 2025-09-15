@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
+use crate::game::tiles::{Tile, TileType};
+
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Seat {
     North = 0,
@@ -20,9 +22,9 @@ pub struct Player {
 
 #[derive(Default)]
 pub struct View {
-    pub hand_tiles: String,
-    pub open_tiles: String,
-    pub discarded_tiles: String,
+    pub open: String,
+    pub hand: Arc<RwLock<Vec<Tile>>>,
+    pub discarded: Arc<RwLock<Vec<Tile>>>,
 }
 
 impl Player {
@@ -34,5 +36,15 @@ impl Player {
             id: Arc::new(RwLock::new(id.to_string())),
             alias: Arc::new(RwLock::new(alias.to_string())),
         }
+    }
+
+    pub async fn discard_tile(&self, target: TileType) -> bool {
+        let mut hand = self.view.hand.write().await;
+        if let Some(pos) = hand.iter().position(|t| t.kind == target) {
+            let tile = hand.remove(pos);
+            self.view.discarded.write().await.push(tile);
+            return true;
+        }
+        return false;
     }
 }

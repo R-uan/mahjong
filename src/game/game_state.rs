@@ -7,7 +7,7 @@ use crate::{
         errors::GameError,
         game_action::GameAction,
         player::{Player, Seat},
-        tiles::Tile,
+        tiles::TileType,
     },
     utils::log_manager::LogManager,
 };
@@ -15,7 +15,7 @@ use crate::{
 pub struct GameState {
     pub tile_wall: String,
     pub turn: Arc<RwLock<i32>>,
-    pub last_discard: Arc<RwLock<Option<Tile>>>,
+    pub last_discard: Arc<RwLock<Option<TileType>>>,
     pub player_pool: Arc<RwLock<HashMap<Seat, Arc<Player>>>>,
 }
 
@@ -33,14 +33,14 @@ impl GameState {
 pub struct GameManager {
     match_id: String,
     state: GameState,
-    log: Arc<LogManager>,
+    logger: Arc<LogManager>,
     current_seat: Arc<RwLock<Seat>>,
 }
 
 impl GameManager {
     pub fn new_instance(lm: Arc<LogManager>) -> GameManager {
         Self {
-            log: lm,
+            logger: lm,
             match_id: String::new(),
             state: GameState::start_game(),
             current_seat: Arc::new(RwLock::new(Seat::East)),

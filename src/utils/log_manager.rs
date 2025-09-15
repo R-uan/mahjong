@@ -14,9 +14,9 @@ pub struct LogManager {
     pub clients: Arc<RwLock<Vec<LoggerClient>>>,
 }
 
-struct LoggerClient {
-    stream: Arc<RwLock<TcpStream>>,
-    receiver: broadcast::Receiver<Box<u8>>,
+pub struct LoggerClient {
+    pub stream: Arc<RwLock<TcpStream>>,
+    pub receiver: broadcast::Receiver<Box<u8>>,
 }
 
 impl LogManager {
@@ -58,12 +58,13 @@ impl LogManager {
         Ok(Arc::clone(&lm))
     }
 
-    pub async fn send(self: Arc<Self>, l: LogLevel, m: &str, t: &str) {
+    pub async fn send(&self, l: LogLevel, m: &str, t: &str) {
         let entry = LogEntry::new(l, m, t);
         let mut cleanup: Vec<usize> = Vec::new();
         if let Ok(encoded) = serde_cbor::to_vec(&entry) {
             let bytes = encoded.into_boxed_slice();
             let clients = self.clients.read().await;
+
             for i in 0..clients.len() {
                 let client = &clients[i];
                 if let Err(_) = client.stream.write().await.write(&bytes).await {

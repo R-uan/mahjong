@@ -1,4 +1,4 @@
-use crate::game::{errors::GameError, tiles::Tile};
+use crate::utils::errors::Error;
 
 pub enum Action {
     DISCARD = 0,
@@ -8,7 +8,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn from(value: i32) -> Option<Action> {
+    pub fn get(value: i32) -> Option<Action> {
         match value {
             0 => Some(Action::DISCARD),
             1 => Some(Action::KAN),
@@ -20,13 +20,16 @@ impl Action {
 }
 
 pub struct GameAction {
-    pub target: Tile,
     pub action: Action,
+    // I removed the target property cause the epiphany,
+    // that the target will always be the last discarded
 }
 
 impl GameAction {
-    fn from_bytes(b: Box<[u8]>) -> Result<GameAction, GameError> {
-        let action_bytes = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
-        todo!()
+    fn from_bytes(b: Box<[u8]>) -> Result<GameAction, Error> {
+        match Action::get(u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as i32) {
+            Some(action) => return Ok(GameAction { action }),
+            None => return Err(Error::GameActionParsingFailed(1)),
+        }
     }
 }

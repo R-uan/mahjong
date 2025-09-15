@@ -2,7 +2,7 @@ use crate::game::player::Player;
 use crate::protocol::packet::{Packet, PacketType};
 use crate::protocol::protocol::Protocol;
 use crate::utils::errors::Error;
-use crate::utils::log_manager::LogLevel;
+use crate::utils::log_manager::{LogLevel, LogManager};
 use crate::utils::models::AuthResponse;
 use reqwest::StatusCode;
 use std::collections::HashMap;
@@ -16,13 +16,15 @@ use tokio::sync::RwLock;
 use tokio::time::sleep;
 
 pub struct ClientManager {
+    pub logger: Arc<LogManager>,
     pub protocol: Arc<Protocol>,
     pub client_pool: Arc<RwLock<HashMap<String, Arc<Client>>>>,
 }
 
 impl ClientManager {
-    pub fn new_manager(protocol: Arc<Protocol>) -> Self {
+    pub fn new_manager(protocol: Arc<Protocol>, logger: Arc<LogManager>) -> Self {
         Self {
+            logger,
             protocol,
             client_pool: Arc::new(RwLock::new(HashMap::default())),
         }
@@ -52,13 +54,22 @@ impl ClientManager {
                         let mut client_poll = self.client_pool.write().await;
                         *player.connected.write().await = true;
 
-                        self.protocol.log.send(
-                            LogLevel::Info,
-                            &format!("{addr} authenticated as {}", &player.alias.read().await),
-                            "Client Manager",
-                        );
+                        self.logger
+                            .send(
+                                LogLevel::Info,
+                                &format!("{addr} connected as {}", &player.alias.read().await),
+                                "Client Manager",
+                            )
+                            .await;
 
-                        let client = Client::new(addr, stream, player, self.protocol.clone()).await;
+                        let client = Client::new(
+                            addr,
+                            stream,
+                            player,
+                            self.protocol.clone(),
+                            self.logger.clone(),
+                        )
+                        .await;
 
                         tokio::spawn({
                             let client_clone = Arc::clone(&client);
@@ -112,6 +123,7 @@ impl ClientManager {
 
 pub struct Client {
     pub player: Arc<Player>,
+    pub logger: Arc<LogManager>,
     pub protocol: Arc<Protocol>,
     pub listening: Arc<RwLock<bool>>,
     pub addr: Arc<RwLock<SocketAddr>>,
@@ -125,10 +137,12 @@ impl Client {
         stream: TcpStream,
         player: Arc<Player>,
         protocol: Arc<Protocol>,
+        logger: Arc<LogManager>,
     ) -> Arc<Self> {
         let (read, write) = stream.into_split();
         Arc::new(Self {
             player,
+            logger,
             protocol,
             addr: Arc::new(RwLock::new(addr)),
             read_half: Arc::new(RwLock::new(read)),

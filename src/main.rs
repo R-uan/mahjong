@@ -2,9 +2,9 @@ use crate::network::server::Server;
 use std::sync::Arc;
 
 mod game;
-mod utils;
 mod network;
 mod protocol;
+mod utils;
 
 #[tokio::main]
 async fn main() {
@@ -12,6 +12,4 @@ async fn main() {
         let server_arc = Arc::new(server);
         server_arc.start().await;
     }
-
-    println!("Hello, world!");
 }
