@@ -1,3 +1,10 @@
+use std::{
+    arch::x86_64::_MM_MASK_INVALID,
+    fmt::{self, Display},
+};
+
+use crate::utils::errors::Error;
+
 #[derive(PartialEq, Eq)]
 pub enum TileType {
     // Bamboos
@@ -42,7 +49,7 @@ pub enum TileType {
 }
 
 impl TileType {
-    pub fn from(value: i32) -> Option<Self> {
+    pub fn parse(value: i8) -> Option<Self> {
         match value {
             1 => Some(TileType::Souzu1),
             2 => Some(TileType::Souzu2),
@@ -83,7 +90,64 @@ impl TileType {
     }
 }
 
+impl Display for TileType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            // Bamboos
+            TileType::Souzu1 => "1s",
+            TileType::Souzu2 => "2s",
+            TileType::Souzu3 => "3s",
+            TileType::Souzu4 => "4s",
+            TileType::Souzu5 => "5s",
+            TileType::Souzu6 => "6s",
+            TileType::Souzu7 => "7s",
+            TileType::Souzu8 => "8s",
+            TileType::Souzu9 => "9s",
+            // Circles
+            TileType::Pinzu1 => "1p",
+            TileType::Pinzu2 => "2p",
+            TileType::Pinzu3 => "3p",
+            TileType::Pinzu4 => "4p",
+            TileType::Pinzu5 => "5p",
+            TileType::Pinzu6 => "6p",
+            TileType::Pinzu7 => "7p",
+            TileType::Pinzu8 => "8p",
+            TileType::Pinzu9 => "9p",
+            // Characters
+            TileType::Manzu1 => "1m",
+            TileType::Manzu2 => "2m",
+            TileType::Manzu3 => "3m",
+            TileType::Manzu4 => "4m",
+            TileType::Manzu5 => "5m",
+            TileType::Manzu6 => "6m",
+            TileType::Manzu7 => "7m",
+            TileType::Manzu8 => "8m",
+            TileType::Manzu9 => "9m",
+            // Dragons
+            TileType::Red => "Red",
+            TileType::White => "White",
+            TileType::Green => "Green",
+            // Winds
+            TileType::East => "East",
+            TileType::West => "West",
+            TileType::North => "North",
+            TileType::South => "South",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 pub struct Tile {
     pub kind: TileType,
     pub copy: u8, // 0-3
+}
+
+impl Tile {
+    pub fn from_bytes(t: u8, c: u8) -> Result<Tile, Error> {
+        if let Some(kind) = TileType::parse(t as i8) {
+            return Ok(Self { kind, copy: c });
+        }
+
+        return Err(Error::TileParsingFailed);
+    }
 }

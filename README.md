@@ -8,19 +8,22 @@
 - GameState - stores the game state.
 - GameManager - handles the game state and the game logic.
 
+#### Gameplay loop
+- Game starts, east if the first player.
+- East draw a tile, server waits for his discard
+- Once discarded, the server checks for win condition, if none, go to next player
+- next player draw...
 
-Server -> ClientManager -> Client
 
-Client -> Protocol
 
-Protocol -> GameManager -> GameState
 
-GameManager -> Server -> Protocol
+### TODO
+- Player round loop (Draw, Discard, Next Player, Repeat)
+- Add Player hand validation (so they can draw the correct amount) 
 
-### Authentication Pipeline
-- New client connects
-- ClientManager waits for authentication
-  - Client has 5 attempts
-  - If authenticated, Client is created
-  
-- packet handling
+#### Error Codes
+
+##### Game Related Errors [151-200]
+- 151 : Unable to draw tile (Hand Full).
+- 152 : Unable to draw tile (Wall Empty).
+

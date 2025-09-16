@@ -1,4 +1,4 @@
-use crate::protocol::errors::ProtocolError;
+use crate::utils::errors::Error;
 
 #[derive(Debug, PartialEq)]
 pub enum PacketType {
@@ -37,12 +37,12 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn from_bytes(b: &[u8]) -> Result<Packet, ProtocolError> {
+    pub fn from_bytes(b: &[u8]) -> Result<Packet, Error> {
         if b.len() < 10 {
-            return Err(ProtocolError::InvalidPacket);
+            return Err(Error::PacketParsingFailed(101));
         }
         match PacketType::from_byte(u32::from_le_bytes([b[4], b[5], b[6], b[7]])) {
-            None => return Err(ProtocolError::InvalidPacket),
+            None => return Err(Error::PacketParsingFailed(102)),
             Some(packet_type) => {
                 let id = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
                 let size = u32::from_le_bytes([b[8], b[9], b[10], b[11]]);

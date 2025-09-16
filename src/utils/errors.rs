@@ -1,11 +1,28 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Failed to authenticate client ({0})")]
+    // Server Related Errors
+    #[error("network error: failed to authenticate client ({0})")]
     AuthenticationFailed(u16),
 
-    #[error("Failed to join match")]
+    // Client Related Errors
+    
+    // Protocol Related Errors
+    #[error("Could not parse received packet ({0})")]
+    PacketParsingFailed(u16),
+
+    #[error("request error: failed to parse target Tile")]
+    TileParsingFailed,
+
+    #[error("request error: failed do parse game action packet ({0})")]
+    GameActionParsingFailed(u16),
+    
+    // Game Relasted Errors
+    #[error("request error: failed to join match")]
     MatchAlreadyFull,
 
-    #[error("Failed do parse game action packet {{0}}")]
-    GameActionParsingFailed(u16),
+    #[error("game error: failed to apply game action")]
+    GameActionFailed,
+
+    #[error("game error: unable to draw a tile ({0})")]
+    DrawFailed(u16),
 }

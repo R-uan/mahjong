@@ -1,7 +1,7 @@
 use tokio::sync::RwLock;
 
 use crate::{
-    game::{errors::GameError, game_state::GameManager, player::Player},
+    game::{errors::GameError, game_action::GameAction, game_state::GameManager, player::Player},
     network::client::Client,
     protocol::packet::{Packet, PacketType},
     utils::{log_manager::LogManager, models::AuthResponse},
@@ -37,7 +37,13 @@ impl Protocol {
     }
 
     async fn handle_game_action(&self, c: Arc<Client>, p: &Packet) -> Option<Packet> {
-
+        match GameAction::parse(&p.packet_body) {
+            Ok(action) => {
+                let player = Arc::clone(&c.player);
+                self.game_manager.apply_actions(player, action).await;
+            }
+            Err(error) => {}
+        };
         todo!()
     }
 
