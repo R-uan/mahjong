@@ -1,5 +1,5 @@
 use crate::game::player::Player;
-use crate::protocol::packet::{Packet, PacketType};
+use crate::protocol::packet::{Packet, PacketKind};
 use crate::protocol::protocol::Protocol;
 use crate::utils::errors::Error;
 use crate::utils::log_manager::{LogLevel, LogManager};
@@ -49,7 +49,7 @@ impl ClientManager {
             };
 
             if let Ok(packet) = Packet::from_bytes(&buffer[..read_bytes]) {
-                if packet.packet_type == PacketType::Authentication {
+                if packet.kind == PacketKind::Authentication {
                     if let Ok((player, auth)) = self.authenticate(&packet).await {
                         let mut client_poll = self.client_pool.write().await;
                         *player.connected.write().await = true;
@@ -82,7 +82,7 @@ impl ClientManager {
                         client_poll.insert(id, client);
                         return;
                     }
-                } else if packet.packet_type == PacketType::Reconnection {
+                } else if packet.kind == PacketKind::Reconnection {
                     if let Ok((_, auth)) = self.authenticate(&packet).await {
                         let client_guard = self.client_pool.read().await;
                         if let Some(client) = client_guard.get(&auth.id) {

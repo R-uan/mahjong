@@ -33,5 +33,8 @@ pub enum Error {
     NextPlayerFailed,
 
     #[error("")]
-    NoAvailableSeats
+    NoAvailableSeats,
+
+    #[error("game error: could not discard tile ({0})")]
+    DiscardFailed(u16),
 }

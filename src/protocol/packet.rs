@@ -1,14 +1,17 @@
 use crate::utils::errors::Error;
 
 #[derive(Debug, PartialEq)]
-pub enum PacketType {
+pub enum PacketKind {
     Ping = 0,
     Reconnection = 2,
     Authentication = 1,
     GameAction = 3,
+    ActionDone = 4,
+    ActionFail = 5,
+    Error = 6,
 }
 
-impl PacketType {
+impl PacketKind {
     pub fn from_byte(byte: u32) -> Option<Self> {
         match byte as i32 {
             0 => Some(Self::Ping),
@@ -19,21 +22,24 @@ impl PacketType {
         }
     }
 
-    pub fn get_bytes(t: PacketType) -> [u8; 4] {
+    pub fn get_bytes(t: PacketKind) -> [u8; 4] {
         match t {
-            PacketType::Ping => [0x00, 0x00, 0x00, 0x00],
-            PacketType::Authentication => [0x01, 0x00, 0x00, 0x00],
-            PacketType::Reconnection => [0x02, 0x00, 0x00, 0x00],
-            PacketType::GameAction => [0x03, 0x00, 0x00, 0x00],
+            PacketKind::Ping => [0x00, 0x00, 0x00, 0x00],
+            PacketKind::Authentication => [0x01, 0x00, 0x00, 0x00],
+            PacketKind::Reconnection => [0x02, 0x00, 0x00, 0x00],
+            PacketKind::GameAction => [0x03, 0x00, 0x00, 0x00],
+            PacketKind::ActionDone => [0x04, 0x00, 0x00, 0x00],
+            PacketKind::ActionFail => [0x05, 0x00, 0x00, 0x00],
+            PacketKind::Error => [0x06, 0x00, 0x00, 0x00],
         }
     }
 }
 
 pub struct Packet {
-    pub packet_id: i32,
-    pub packet_size: i32,
-    pub packet_body: Box<[u8]>,
-    pub packet_type: PacketType,
+    pub id: i32,
+    pub size: i32,
+    pub body: Box<[u8]>,
+    pub kind: PacketKind,
 }
 
 impl Packet {
@@ -41,28 +47,28 @@ impl Packet {
         if b.len() < 10 {
             return Err(Error::PacketParsingFailed(101));
         }
-        match PacketType::from_byte(u32::from_le_bytes([b[4], b[5], b[6], b[7]])) {
+        match PacketKind::from_byte(u32::from_le_bytes([b[4], b[5], b[6], b[7]])) {
             None => return Err(Error::PacketParsingFailed(102)),
-            Some(packet_type) => {
+            Some(kind) => {
                 let id = u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
                 let size = u32::from_le_bytes([b[8], b[9], b[10], b[11]]);
                 let body = b[12..b.len() - 2].to_vec().into_boxed_slice();
                 return Ok(Self {
-                    packet_id: id as i32,
-                    packet_size: size as i32,
-                    packet_body: body,
-                    packet_type: packet_type,
+                    id: id as i32,
+                    size: size as i32,
+                    body,
+                    kind,
                 });
             }
         }
     }
 
-    pub fn create(id: i32, packet_type: PacketType, body: &[u8]) -> Packet {
+    pub fn create(id: i32, packet_type: PacketKind, body: &[u8]) -> Packet {
         Self {
-            packet_type,
-            packet_id: id,
-            packet_size: (8 + 2 + body.len()) as i32,
-            packet_body: body.to_vec().into_boxed_slice(),
+            kind: packet_type,
+            id,
+            size: (8 + 2 + body.len()) as i32,
+            body: body.to_vec().into_boxed_slice(),
         }
     }
 
@@ -83,10 +89,10 @@ mod tests {
         ];
 
         if let Ok(packet) = Packet::from_bytes(&bytes) {
-            assert_eq!(packet.packet_type, PacketType::Ping);
-            assert_eq!(packet.packet_size, 15);
-            assert_eq!(packet.packet_id, 1);
-            let body = String::from_utf8(packet.packet_body.to_vec()).unwrap();
+            assert_eq!(packet.kind, PacketKind::Ping);
+            assert_eq!(packet.size, 15);
+            assert_eq!(packet.id, 1);
+            let body = String::from_utf8(packet.body.to_vec()).unwrap();
             assert_eq!(body, "hello");
         }
     }

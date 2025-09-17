@@ -20,6 +20,9 @@
 ### TODO
 - Player round loop (Draw, Discard, Next Player, Repeat)
 - Add Player hand validation (so they can draw the correct amount) 
+- Remake package types (Game Actions should be types)
+- Remake protocol package handling
+- Remove authentication requirement and make it "guest" only
 
 #### Error Codes
 
@@ -31,4 +34,5 @@
 - 155 : South seat is not occupied
 - 161 : Unable to draw tile (Hand Full).
 - 162 : Unable to draw tile (Wall Empty).
+- 163 : Unable to discard tile (Tile not in hand)
 

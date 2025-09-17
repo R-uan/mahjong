@@ -84,6 +84,18 @@ impl GameManager {
         hand.push(tile);
         return Ok(tile_clone);
     }
+
+    pub async fn discard(&self, player: Arc<Player>, action: GameAction) -> Result<bool, Error> {
+        if *self.current_turn.read().await != *player.seat.read().await {
+            return Ok(false);
+        }
+
+        let tile = action.target.ok_or(Error::TileParsingFailed)?;
+        match player.discard_tile(&tile).await {
+            true => return Ok(true),
+            false => return Err(Error::DiscardFailed(163)),
+        };
+    }
 }
 
 impl GameManager {
