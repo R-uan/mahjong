@@ -4,7 +4,6 @@ use tokio::sync::RwLock;
 
 use crate::{
     game::{
-        errors::GameError,
         game_action::{Action, GameAction},
         player::{Player, Seat},
         tiles::{Tile, TileType},
@@ -37,7 +36,8 @@ pub struct GameManager {
     match_id: String,
     state: GameState,
     logger: Arc<LogManager>,
-    current_seat: Arc<RwLock<Seat>>,
+    running: Arc<RwLock<bool>>,
+    current_turn: Arc<RwLock<Seat>>,
 }
 
 impl GameManager {
@@ -46,19 +46,72 @@ impl GameManager {
             logger: lm,
             match_id: String::new(),
             state: GameState::start_game(),
-            current_seat: Arc::new(RwLock::new(Seat::East)),
+            running: Arc::new(RwLock::new(false)),
+            current_turn: Arc::new(RwLock::new(Seat::East)),
         }
     }
 
-    pub async fn start_game(&self, player: Arc<Player>) {}
-
-    pub async fn next_player(&self) {
-        *self.current_seat.write().await = match *self.current_seat.read().await {
+    pub async fn next_player(&self) -> Result<Arc<Player>, Error> {
+        let mut guard = self.current_turn.write().await;
+        let next_seat = match *guard {
             Seat::East => Seat::North,
             Seat::North => Seat::West,
             Seat::West => Seat::South,
             Seat::South => Seat::East,
         };
+
+        *guard = next_seat;
+        if let Some(player) = self.state.player_pool.read().await.get(&next_seat) {
+            return Ok(Arc::clone(player));
+        }
+        return Err(Error::NextPlayerFailed);
+    }
+
+    pub async fn draw(&self, player: Arc<Player>) -> Result<Arc<Tile>, Error> {
+        let mut hand = player.view.hand.write().await;
+        if hand.len() >= 14 {
+            return Err(Error::DrawFailed(161));
+        }
+
+        let mut wall = self.state.wall.write().await;
+        if wall.len() == 0 {
+            return Err(Error::DrawFailed(162));
+        }
+
+        let tile = wall.pop().ok_or(Error::DrawFailed(162))?;
+        let tile_clone = Arc::clone(&tile);
+
+        hand.push(tile);
+        return Ok(tile_clone);
+    }
+}
+
+impl GameManager {
+    pub async fn check_ready(&self) -> Result<bool, Error> {
+        let player_pool = self.state.player_pool.read().await;
+        // Check if there are four players connected
+        if player_pool.len() == 4 {
+            return Err(Error::MatchStartFailed(151));
+        }
+
+        let _ = player_pool
+            .get(&Seat::East)
+            .ok_or(Error::MatchStartFailed(152))?;
+        let _ = player_pool
+            .get(&Seat::West)
+            .ok_or(Error::MatchStartFailed(153))?;
+        let _ = player_pool
+            .get(&Seat::North)
+            .ok_or(Error::MatchStartFailed(154))?;
+        let _ = player_pool
+            .get(&Seat::South)
+            .ok_or(Error::MatchStartFailed(155))?;
+
+        return Ok(true);
+    }
+
+    pub async fn wrap(&self) {
+        todo!()
     }
 
     pub async fn apply_actions(&self, p: Arc<Player>, a: GameAction) -> Result<bool, Error> {
@@ -90,31 +143,6 @@ impl GameManager {
         return result;
     }
 
-    // Player draw a tile
-    //
-    // Ok
-    // - Arc reference of the drawn tile
-    // Err
-    // - 151 : Unable to draw tile (Hand full)
-    // - 152 : Unable to draw tile (Wall Empty)
-    async fn draw(&self, player: Arc<Player>) -> Result<Arc<Tile>, Error> {
-        let mut hand = player.view.hand.write().await;
-        if hand.len() >= 14 {
-            return Err(Error::DrawFailed(151));
-        }
-
-        let mut wall = self.state.wall.write().await;
-        if wall.len() == 0 {
-            return Err(Error::DrawFailed(152));
-        }
-
-        let tile = wall.pop().ok_or(Error::DrawFailed(152))?;
-        let tile_clone = Arc::clone(&tile);
-
-        hand.push(tile);
-        return Ok(tile_clone);
-    }
-
     pub async fn get_free_seat(&self) -> Option<Seat> {
         let player_pool_guard = self.state.player_pool.read().await;
         return if player_pool_guard.get(&Seat::East).is_none() {
@@ -130,9 +158,9 @@ impl GameManager {
         };
     }
 
-    pub async fn assign_player(&self, id: &str, alias: &str) -> Result<Arc<Player>, GameError> {
+    pub async fn assign_player(&self, id: &str, alias: &str) -> Result<Arc<Player>, Error> {
         match self.get_free_seat().await {
-            None => Err(GameError::NoAvailableSeats),
+            None => Err(Error::NoAvailableSeats),
             Some(seat) => {
                 let player = Arc::new(Player::new(seat.clone(), id, alias));
                 let mut player_pool_guard = self.state.player_pool.write().await;

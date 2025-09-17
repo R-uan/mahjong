@@ -1,7 +1,4 @@
-use std::{
-    arch::x86_64::_MM_MASK_INVALID,
-    fmt::{self, Display},
-};
+use std::fmt::{self, Display};
 
 use crate::utils::errors::Error;
 

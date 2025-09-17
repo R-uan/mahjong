@@ -5,7 +5,7 @@ pub enum Error {
     AuthenticationFailed(u16),
 
     // Client Related Errors
-    
+
     // Protocol Related Errors
     #[error("Could not parse received packet ({0})")]
     PacketParsingFailed(u16),
@@ -15,7 +15,7 @@ pub enum Error {
 
     #[error("request error: failed do parse game action packet ({0})")]
     GameActionParsingFailed(u16),
-    
+
     // Game Relasted Errors
     #[error("request error: failed to join match")]
     MatchAlreadyFull,
@@ -25,4 +25,13 @@ pub enum Error {
 
     #[error("game error: unable to draw a tile ({0})")]
     DrawFailed(u16),
+
+    #[error("game error: could not start match ({0})")]
+    MatchStartFailed(u16),
+
+    #[error("game error: could not get next player")]
+    NextPlayerFailed,
+
+    #[error("")]
+    NoAvailableSeats
 }

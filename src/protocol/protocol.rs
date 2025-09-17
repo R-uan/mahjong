@@ -1,25 +1,23 @@
 use tokio::sync::RwLock;
 
 use crate::{
-    game::{errors::GameError, game_action::GameAction, game_state::GameManager, player::Player},
+    game::{game_action::GameAction, game_state::GameManager, player::Player},
     network::client::Client,
     protocol::packet::{Packet, PacketType},
-    utils::{log_manager::LogManager, models::AuthResponse},
+    utils::{errors::Error, log_manager::LogManager, models::AuthResponse},
 };
 use std::sync::Arc;
 
 pub struct Protocol {
-    pub log: Arc<LogManager>,
-    global_id: Arc<RwLock<i32>>,
+    pub logger: Arc<LogManager>,
     game_manager: Arc<GameManager>,
 }
 
 impl Protocol {
     pub fn new(gm: Arc<GameManager>, lm: Arc<LogManager>) -> Self {
         Self {
-            log: lm,
+            logger: lm,
             game_manager: gm,
-            global_id: Arc::new(RwLock::new(0)),
         }
     }
 
@@ -40,7 +38,6 @@ impl Protocol {
         match GameAction::parse(&p.packet_body) {
             Ok(action) => {
                 let player = Arc::clone(&c.player);
-                self.game_manager.apply_actions(player, action).await;
             }
             Err(error) => {}
         };
@@ -52,7 +49,7 @@ impl Protocol {
         return Packet::create(packet.packet_id, PacketType::Ping, pong);
     }
 
-    pub async fn connect_player(&self, auth: &AuthResponse) -> Result<Arc<Player>, GameError> {
+    pub async fn connect_player(&self, auth: &AuthResponse) -> Result<Arc<Player>, Error> {
         return self.game_manager.assign_player(&auth.id, &auth.alias).await;
     }
 }

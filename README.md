@@ -24,6 +24,11 @@
 #### Error Codes
 
 ##### Game Related Errors [151-200]
-- 151 : Unable to draw tile (Hand Full).
-- 152 : Unable to draw tile (Wall Empty).
+- 151 : Not all seats are occupied
+- 152 : East seat is not occupied
+- 153 : West seat is not occupied
+- 154 : North seat is not occupied
+- 155 : South seat is not occupied
+- 161 : Unable to draw tile (Hand Full).
+- 162 : Unable to draw tile (Wall Empty).
 
