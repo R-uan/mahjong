@@ -8,7 +8,11 @@ use crate::{
     },
     network::client::Client,
     protocol::packet::{Packet, PacketKind},
-    utils::{errors::Error, log_manager::LogManager, models::AuthResponse},
+    utils::{
+        errors::Error,
+        log_manager::LogManager,
+        models::{AuthResponse, JoinRequest},
+    },
 };
 use std::sync::Arc;
 
@@ -69,7 +73,7 @@ impl Protocol {
         return Packet::create(packet.id, PacketKind::Ping, pong);
     }
 
-    pub async fn connect_player(&self, auth: &AuthResponse) -> Result<Arc<Player>, Error> {
-        return self.game_manager.assign_player(&auth.id, &auth.alias).await;
+    pub async fn connect_player(&self, req: &JoinRequest) -> Result<Arc<Player>, Error> {
+        return self.game_manager.assign_player(&req.id, &req.alias).await;
     }
 }

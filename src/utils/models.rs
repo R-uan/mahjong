@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct AuthResponse {
+pub struct JoinRequest {
     pub id: String,
     pub alias: String,
-    pub rank: Option<String>,
 }

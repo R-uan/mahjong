@@ -3,8 +3,7 @@ use crate::protocol::packet::{Packet, PacketKind};
 use crate::protocol::protocol::Protocol;
 use crate::utils::errors::Error;
 use crate::utils::log_manager::{LogLevel, LogManager};
-use crate::utils::models::AuthResponse;
-use reqwest::StatusCode;
+use crate::utils::models::JoinRequest;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -50,7 +49,7 @@ impl ClientManager {
 
             if let Ok(packet) = Packet::from_bytes(&buffer[..read_bytes]) {
                 if packet.kind == PacketKind::Authentication {
-                    if let Ok((player, auth)) = self.authenticate(&packet).await {
+                    if let Ok((player, request)) = self.join(&packet).await {
                         let mut client_poll = self.client_pool.write().await;
                         *player.connected.write().await = true;
 
@@ -63,6 +62,7 @@ impl ClientManager {
                             .await;
 
                         let client = Client::new(
+                            request.id.to_string(),
                             addr,
                             stream,
                             player,
@@ -78,14 +78,13 @@ impl ClientManager {
                             }
                         });
 
-                        let id = auth.id.to_string();
-                        client_poll.insert(id, client);
+                        client_poll.insert(request.id, client);
                         return;
                     }
                 } else if packet.kind == PacketKind::Reconnection {
-                    if let Ok((_, auth)) = self.authenticate(&packet).await {
+                    if let Ok((_, request)) = self.join(&packet).await {
                         let client_guard = self.client_pool.read().await;
-                        if let Some(client) = client_guard.get(&auth.id) {
+                        if let Some(client) = client_guard.get(&request.id) {
                             let client_clone = Arc::clone(&client);
                             client_clone.reconnect(stream, addr).await;
                             return;
@@ -98,30 +97,16 @@ impl ClientManager {
         }
     }
 
-    // Calls into the player auth server to authenticate player.
-    pub async fn authenticate(&self, _: &Packet) -> Result<(Arc<Player>, AuthResponse), Error> {
-        match reqwest::get("").await {
-            Ok(response) => match response.status() {
-                StatusCode::OK => {
-                    let auth = response
-                        .json::<AuthResponse>()
-                        .await
-                        .map_err(|_| Error::AuthenticationFailed(6))?;
-                    let player = self
-                        .protocol
-                        .connect_player(&auth)
-                        .await
-                        .map_err(|_| Error::MatchAlreadyFull)?;
-                    return Ok((player, auth));
-                }
-                _ => Err(Error::AuthenticationFailed(5)),
-            },
-            Err(_) => Err(Error::AuthenticationFailed(5)),
-        }
+    pub async fn join(&self, packet: &Packet) -> Result<(Arc<Player>, JoinRequest), Error> {
+        let request = serde_cbor::from_slice::<JoinRequest>(&packet.body)
+            .map_err(|_| Error::AuthenticationFailed(10))?;
+        let player = self.protocol.connect_player(&request).await?;
+        return Ok((player, request));
     }
 }
 
 pub struct Client {
+    pub id: String,
     pub player: Arc<Player>,
     pub logger: Arc<LogManager>,
     pub protocol: Arc<Protocol>,
@@ -133,6 +118,7 @@ pub struct Client {
 
 impl Client {
     pub async fn new(
+        id: String,
         addr: SocketAddr,
         stream: TcpStream,
         player: Arc<Player>,
@@ -141,6 +127,7 @@ impl Client {
     ) -> Arc<Self> {
         let (read, write) = stream.into_split();
         Arc::new(Self {
+            id,
             player,
             logger,
             protocol,
