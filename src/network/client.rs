@@ -1,11 +1,10 @@
 use crate::game::player::Player;
 use crate::protocol::packet::{Packet, WriteBytesExt};
 use crate::protocol::protocol::Protocol;
-use crate::utils::log_manager::LogManager;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt};
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::RwLock;
@@ -14,7 +13,6 @@ use tokio::time::sleep;
 pub struct Client {
     pub id: String,
     pub player: Arc<Player>,
-    pub logger: Arc<LogManager>,
     pub protocol: Arc<Protocol>,
     pub listening: Arc<RwLock<bool>>,
     pub addr: Arc<RwLock<SocketAddr>>,
@@ -29,13 +27,11 @@ impl Client {
         stream: TcpStream,
         player: Arc<Player>,
         protocol: Arc<Protocol>,
-        logger: Arc<LogManager>,
     ) -> Arc<Self> {
         let (read, write) = stream.into_split();
         Arc::new(Self {
             id,
             player,
-            logger,
             protocol,
             addr: Arc::new(RwLock::new(addr)),
             read_half: Arc::new(RwLock::new(read)),
@@ -50,10 +46,10 @@ impl Client {
     // Calls Protocol to handle each valid packet in a tokio async task.
     pub async fn connect(self: Arc<Self>) {
         tokio::spawn(async move {
+            let mut buffer = [0; 4096];
             *self.listening.write().await = true;
             *self.player.connected.write().await = true;
 
-            let mut buffer = [0; 4096];
             while *self.listening.read().await {
                 let mut read_stream = self.read_half.write().await;
                 let bytes_read = match read_stream.read(&mut buffer).await {
@@ -62,15 +58,14 @@ impl Client {
                     Err(_) => continue,
                 };
 
-                if let Ok(packet) = Packet::from_bytes(&buffer[..bytes_read]) {
-                    tokio::spawn({
-                        let client = Arc::clone(&self);
-                        let protocol = Arc::clone(&self.protocol);
-                        async move {
-                            protocol.handle_packet(client, packet).await;
-                        }
-                    });
-                }
+                match Packet::from_bytes(&buffer[..bytes_read]) {
+                    Err(error) => self.send_packet(Packet::error(0, error)).await,
+                    Ok(packet) => {
+                        Arc::clone(&self.protocol)
+                            .handle_packet(Arc::clone(&self), packet)
+                            .await
+                    }
+                };
             }
 
             self.disconnect().await;
@@ -90,7 +85,7 @@ impl Client {
         *self.player.connected.write().await = false;
     }
 
-    pub async fn send_packet(self: Arc<Self>, packet: Packet) {
+    pub async fn send_packet(&self, packet: Packet) {
         let mut tries = 0;
         while tries < 30 {
             let mut write_guard = self.write_half.write().await;

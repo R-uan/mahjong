@@ -6,7 +6,7 @@ use crate::utils::log_manager::LogManager;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt};
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::sync::RwLock;
 
@@ -50,11 +50,9 @@ impl ClientManager {
                         Err(error) => stream.send_packet(&Packet::error(packet.id, error)).await,
                         Ok(player) => {
                             let protocol = self.protocol.clone();
-                            let logger = self.logger.clone();
                             let id = player.id.read().await.to_owned();
                             let client =
-                                Client::new(id.to_owned(), addr, stream, player, protocol, logger)
-                                    .await;
+                                Client::new(id.to_owned(), addr, stream, player, protocol).await;
                             Arc::clone(&client).connect().await;
                             self.client_pool.write().await.insert(id, client);
                             return;
@@ -63,14 +61,25 @@ impl ClientManager {
                     PacketKind::Reconnection => match self.protocol.handle_reconnect(&packet) {
                         Err(error) => stream.send_packet(&Packet::error(packet.id, error)).await,
                         Ok(request) => match self.client_pool.read().await.get(&request.id) {
-                            None => stream.send_packet(&Packet::error(packet.id, Error::ReconnectionFailed(55))).await,
+                            None => {
+                                stream
+                                    .send_packet(&Packet::error(
+                                        packet.id,
+                                        Error::ReconnectionFailed(55),
+                                    ))
+                                    .await
+                            }
                             Some(client) => {
                                 Arc::clone(&client).reconnect(stream, addr).await;
                                 return;
                             }
                         },
                     },
-                    _ => stream.send_packet(&Packet::error(packet.id, Error::ConnectionNeeded)).await,
+                    _ => {
+                        stream
+                            .send_packet(&Packet::error(packet.id, Error::ConnectionNeeded))
+                            .await
+                    }
                 },
             };
 

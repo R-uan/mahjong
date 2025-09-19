@@ -20,7 +20,8 @@
 - Remake package types (Game Actions should be types)
 - Remake protocol package handling
 - ~~Remove authentication requirement and make it "guest" only~~
-- Move client join handling to protocol
+- ~~Move client join handling to protocol~~
+- Finish the MatchManager > Protocol communication
 
 #### Error Codes
 
@@ -29,8 +30,11 @@
 - 56 : Client attempted an action before sending a connection packet.
 
 ##### Protocol Related Errors [101-150]
+- 101 : Packet format is invalid and could not be parsed.
+- 102 : Packet kind is not valid.
 - 105 : Connection Failed (Invalid connection packet body)
 - 106 : Connection Failed ()
+
 ##### Game Related Errors [151-200]
 - 151 : Not all seats are occupied
 - 152 : East seat is not occupied

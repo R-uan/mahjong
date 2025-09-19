@@ -49,6 +49,7 @@ pub struct GameAction {
 impl GameAction {
     pub fn parse(b: &Box<[u8]>) -> Result<GameAction, Error> {
         match Action::get(b[0]) {
+            None => return Err(Error::GameActionParsingFailed(1)),
             Some(action) => {
                 return Ok(GameAction {
                     target: match action {
@@ -58,7 +59,6 @@ impl GameAction {
                     action,
                 });
             }
-            None => return Err(Error::GameActionParsingFailed(1)),
         }
     }
 }

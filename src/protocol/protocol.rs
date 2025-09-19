@@ -13,7 +13,7 @@ use crate::{
 };
 
 pub struct Protocol {
-    pub logger: Arc<LogManager>,
+    logger: Arc<LogManager>,
     match_manager: Arc<MatchManager>,
     match_manager_ch: Receiver<MatchState>,
 }
@@ -29,16 +29,18 @@ impl Protocol {
         }
     }
 
-    pub async fn handle_packet(&self, client: Arc<Client>, packet: Packet) {
-        let response: Option<Packet> = match packet.kind {
-            PacketKind::Ping => Some(self.handle_ping(&packet)),
-            PacketKind::GameAction => self.handle_action(client.clone(), &packet).await,
-            _ => Some(Packet::create(packet.id, PacketKind::Error, "".as_bytes())),
-        };
+    pub async fn handle_packet(self: Arc<Self>, client: Arc<Client>, packet: Packet) {
+        tokio::spawn(async move {
+            let response: Option<Packet> = match packet.kind {
+                PacketKind::Ping => Some(self.handle_ping(&packet)),
+                PacketKind::GameAction => self.handle_action(client.clone(), &packet).await,
+                _ => Some(Packet::create(packet.id, PacketKind::Error, "".as_bytes())),
+            };
 
-        if let Some(packet) = response {
-            client.send_packet(packet).await;
-        }
+            if let Some(packet) = response {
+                client.send_packet(packet).await;
+            }
+        });
     }
 
     async fn handle_action(&self, client: Arc<Client>, p: &Packet) -> Option<Packet> {
