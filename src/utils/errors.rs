@@ -5,6 +5,11 @@ pub enum Error {
     AuthenticationFailed(u16),
 
     // Client Related Errors
+    #[error("CLIENT ERROR ({0})")]
+    ReconnectionFailed(u16),
+
+    #[error("CLIENT ERROR (56) ")]
+    ConnectionNeeded,
 
     // Protocol Related Errors
     #[error("Could not parse received packet ({0})")]

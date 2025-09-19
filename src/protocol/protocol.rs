@@ -1,31 +1,31 @@
-use tokio::sync::RwLock;
+use std::sync::Arc;
+use tokio::sync::mpsc::{self, Receiver};
 
 use crate::{
     game::{
         game_action::{Action, GameAction},
-        game_state::GameManager,
+        match_manager::{MatchManager, MatchState},
         player::Player,
     },
     network::client::Client,
     protocol::packet::{Packet, PacketKind},
-    utils::{
-        errors::Error,
-        log_manager::LogManager,
-        models::{AuthResponse, JoinRequest},
-    },
+    utils::{errors::Error, log_manager::LogManager, models::JoinRequest},
 };
-use std::sync::Arc;
 
 pub struct Protocol {
     pub logger: Arc<LogManager>,
-    game_manager: Arc<GameManager>,
+    match_manager: Arc<MatchManager>,
+    match_manager_ch: Receiver<MatchState>,
 }
 
 impl Protocol {
-    pub fn new(gm: Arc<GameManager>, lm: Arc<LogManager>) -> Self {
+    pub fn new(log_manager: Arc<LogManager>) -> Self {
+        let (sender, receiver) = mpsc::channel(5);
+        let match_manager = MatchManager::new_instance(log_manager.clone(), sender);
         Self {
-            logger: lm,
-            game_manager: gm,
+            logger: log_manager,
+            match_manager_ch: receiver,
+            match_manager: Arc::new(match_manager),
         }
     }
 
@@ -43,10 +43,11 @@ impl Protocol {
 
     async fn handle_action(&self, client: Arc<Client>, p: &Packet) -> Option<Packet> {
         match GameAction::parse(&p.body) {
+            Err(_) => None,
             Ok(action) => {
                 let player = Arc::clone(&client.player);
                 match action.action {
-                    Action::DISCARD => match self.game_manager.discard(player, action).await {
+                    Action::DISCARD => match self.match_manager.discard(player, action).await {
                         Err(error) => Some(Packet::create(
                             p.id,
                             PacketKind::Error,
@@ -64,7 +65,6 @@ impl Protocol {
                     Action::RON => None,
                 }
             }
-            Err(error) => None,
         }
     }
 
@@ -73,7 +73,18 @@ impl Protocol {
         return Packet::create(packet.id, PacketKind::Ping, pong);
     }
 
-    pub async fn connect_player(&self, req: &JoinRequest) -> Result<Arc<Player>, Error> {
-        return self.game_manager.assign_player(&req.id, &req.alias).await;
+    pub async fn handle_connect(&self, packet: &Packet) -> Result<Arc<Player>, Error> {
+        let req = serde_cbor::from_slice::<JoinRequest>(&packet.body)
+            .map_err(|_| Error::AuthenticationFailed(105))?;
+        let player = self
+            .match_manager
+            .assign_player(&req.id, &req.alias)
+            .await?;
+        return Ok(player);
+    }
+
+    pub fn handle_reconnect(&self, packet: &Packet) -> Result<JoinRequest, Error> {
+        return serde_cbor::from_slice::<JoinRequest>(&packet.body)
+            .map_err(|_| Error::AuthenticationFailed(105));
     }
 }

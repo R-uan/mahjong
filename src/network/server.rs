@@ -1,5 +1,4 @@
-use crate::game::game_state::GameManager;
-use crate::network::client::ClientManager;
+use crate::network::client_manager::ClientManager;
 use crate::protocol::protocol::Protocol;
 use crate::utils::log_manager::{LogLevel, LogManager};
 use std::io::Error;
@@ -11,7 +10,6 @@ pub struct Server {
     pub logger: Arc<LogManager>,
     pub socket: Arc<TcpListener>,
     pub running: Arc<RwLock<bool>>,
-    pub game_manager: Arc<GameManager>,
     pub client_manager: Arc<ClientManager>,
 }
 
@@ -22,14 +20,12 @@ impl Server {
         let listener = TcpListener::bind((host, port)).await?;
 
         let lm = LogManager::new_instance(port + 1, running.clone()).await?;
-        let gm = Arc::new(GameManager::new_instance(Arc::clone(&lm)));
-        let protocol = Protocol::new(Arc::clone(&gm), Arc::clone(&lm));
+        let protocol = Protocol::new(Arc::clone(&lm));
         let cm = ClientManager::new_manager(Arc::new(protocol), Arc::clone(&lm));
 
         let server = Server {
             port,
             logger: lm,
-            game_manager: gm,
             socket: Arc::new(listener),
             client_manager: Arc::new(cm),
             running: Arc::new(RwLock::new(false)),

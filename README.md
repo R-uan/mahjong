@@ -14,18 +14,23 @@
 - Once discarded, the server checks for win condition, if none, go to next player
 - next player draw...
 
-
-
-
 ### TODO
 - Player round loop (Draw, Discard, Next Player, Repeat)
-- Add Player hand validation (so they can draw the correct amount) 
+- ~~Add Player hand validation (so they can draw the correct amount)~~ 
 - Remake package types (Game Actions should be types)
 - Remake protocol package handling
-- Remove authentication requirement and make it "guest" only
+- ~~Remove authentication requirement and make it "guest" only~~
+- Move client join handling to protocol
 
 #### Error Codes
 
+##### Client Related Errors [51-100]
+- 55 : Client not found on reconnection request
+- 56 : Client attempted an action before sending a connection packet.
+
+##### Protocol Related Errors [101-150]
+- 105 : Connection Failed (Invalid connection packet body)
+- 106 : Connection Failed ()
 ##### Game Related Errors [151-200]
 - 151 : Not all seats are occupied
 - 152 : East seat is not occupied

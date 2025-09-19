@@ -1,10 +1,15 @@
+use tokio::{
+    io::AsyncWriteExt,
+    net::{TcpStream, tcp::OwnedWriteHalf},
+};
+
 use crate::utils::errors::Error;
 
 #[derive(Debug, PartialEq)]
 pub enum PacketKind {
     Ping = 0,
+    Connection = 1,
     Reconnection = 2,
-    Authentication = 1,
     GameAction = 3,
     ActionDone = 4,
     ActionFail = 5,
@@ -15,17 +20,20 @@ impl PacketKind {
     pub fn from_byte(byte: u32) -> Option<Self> {
         match byte as i32 {
             0 => Some(Self::Ping),
-            1 => Some(Self::Authentication),
+            1 => Some(Self::Connection),
             2 => Some(Self::Reconnection),
             3 => Some(Self::GameAction),
+            4 => Some(Self::ActionDone),
+            5 => Some(Self::ActionFail),
+            6 => Some(Self::Error),
             _ => None,
         }
     }
 
-    pub fn get_bytes(t: PacketKind) -> [u8; 4] {
+    pub fn to_bytes(t: &PacketKind) -> [u8; 4] {
         match t {
             PacketKind::Ping => [0x00, 0x00, 0x00, 0x00],
-            PacketKind::Authentication => [0x01, 0x00, 0x00, 0x00],
+            PacketKind::Connection => [0x01, 0x00, 0x00, 0x00],
             PacketKind::Reconnection => [0x02, 0x00, 0x00, 0x00],
             PacketKind::GameAction => [0x03, 0x00, 0x00, 0x00],
             PacketKind::ActionDone => [0x04, 0x00, 0x00, 0x00],
@@ -63,17 +71,59 @@ impl Packet {
         }
     }
 
-    pub fn create(id: i32, packet_type: PacketKind, body: &[u8]) -> Packet {
+    pub fn create(id: i32, packet_kind: PacketKind, body: &[u8]) -> Packet {
         Self {
-            kind: packet_type,
             id,
+            kind: packet_kind,
             size: (8 + 2 + body.len()) as i32,
             body: body.to_vec().into_boxed_slice(),
         }
     }
 
-    pub fn wrap(&self) -> Box<[u8]> {
-        todo!()
+    pub fn error(id: i32, error: Error) -> Packet {
+        return Packet::create(id, PacketKind::Error, error.to_string().as_bytes());
+    }
+}
+
+#[async_trait::async_trait]
+pub trait WriteBytesExt {
+    async fn send_packet<T: ToBytes + Send + Sync>(&mut self, value: &T) -> tokio::io::Result<()>;
+}
+
+#[async_trait::async_trait]
+impl WriteBytesExt for TcpStream {
+    async fn send_packet<T: ToBytes + Send + Sync>(&mut self, value: &T) -> tokio::io::Result<()> {
+        let bytes = value.to_bytes();
+        self.write_all(&bytes).await
+    }
+}
+
+#[async_trait::async_trait]
+impl WriteBytesExt for OwnedWriteHalf {
+    async fn send_packet<T: ToBytes + Send + Sync>(&mut self, value: &T) -> tokio::io::Result<()> {
+        let bytes = value.to_bytes();
+        self.write_all(&bytes).await
+    }
+}
+
+pub trait ToBytes {
+    fn to_bytes(&self) -> Vec<u8>;
+}
+
+impl ToBytes for Packet {
+    fn to_bytes(&self) -> Vec<u8> {
+        let id = i32::to_le_bytes(self.id);
+        let size = i32::to_le_bytes(self.size);
+        let kind = PacketKind::to_bytes(&self.kind);
+        let mut packet = Vec::new();
+
+        packet.extend(id);
+        packet.extend(kind);
+        packet.extend(size);
+        packet.extend(&self.body);
+        packet.extend([0x00, 0x00]);
+
+        return packet;
     }
 }
 

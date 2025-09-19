@@ -5,18 +5,16 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{RwLock, broadcast};
+use tokio::sync::{RwLock};
 
 pub struct LogManager {
     pub socket: TcpListener,
     pub running: Arc<RwLock<bool>>,
-    pub broadcaster: broadcast::Sender<Box<u8>>,
     pub clients: Arc<RwLock<Vec<LoggerClient>>>,
 }
 
 pub struct LoggerClient {
     pub stream: Arc<RwLock<TcpStream>>,
-    pub receiver: broadcast::Receiver<Box<u8>>,
 }
 
 impl LogManager {
@@ -25,15 +23,13 @@ impl LogManager {
 
         let listener = TcpListener::bind((host, port)).await?;
         let clients = Arc::new(RwLock::new(Vec::new()));
-        let (tx, _rx) = broadcast::channel(10);
 
         println!("Log manager on port {port}");
 
         let lm = Arc::new(Self {
-            broadcaster: tx,
-            socket: listener,
             clients,
             running,
+            socket: listener,
         });
 
         tokio::spawn({
@@ -43,9 +39,7 @@ impl LogManager {
                     match lm_clone.socket.accept().await {
                         Err(_) => {}
                         Ok((stream, _)) => {
-                            let receiver = lm_clone.broadcaster.subscribe();
                             let client = LoggerClient {
-                                receiver,
                                 stream: Arc::new(RwLock::new(stream)),
                             };
                             lm_clone.clients.write().await.push(client);
