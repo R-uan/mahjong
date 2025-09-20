@@ -13,12 +13,25 @@ use crate::{
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc::Sender};
 
-pub enum MatchState {
-    Ready,
-    Waiting,
-    Ongoing,
-    Finished,
-    Interrupted,
+#[derive(Clone, PartialEq, Eq)]
+pub enum MatchStatus {
+    Waiting = 0,
+    Ready = 1,
+    Finished = 2,
+    Ongoing = 3,
+    Interrupted = 4,
+}
+
+impl MatchStatus {
+    pub fn wrap(&self) -> [u8; 4] {
+        match &self {
+            Self::Ready => [0x01, 0x00, 0x00, 0x00],
+            Self::Waiting => [0x00, 0x00, 0x00, 0x00],
+            Self::Ongoing => [0x03, 0x00, 0x00, 0x00],
+            Self::Finished => [0x02, 0x00, 0x00, 0x00],
+            Self::Interrupted => [0x04, 0x00, 0x00, 0x00],
+        }
+    }
 }
 
 pub struct MatchManager {
@@ -26,19 +39,19 @@ pub struct MatchManager {
     state: GameState,
     logger: Arc<LogManager>,
     current_turn: Arc<RwLock<Seat>>,
-    running: Arc<RwLock<MatchState>>,
-    protocol_ch: Arc<Sender<MatchState>>,
+    pub status: Arc<RwLock<MatchStatus>>,
+    protocol_ch: Arc<Sender<MatchStatus>>,
 }
 
 impl MatchManager {
-    pub fn new_instance(log_manager: Arc<LogManager>, sender: Sender<MatchState>) -> MatchManager {
+    pub fn new_instance(log_manager: Arc<LogManager>, sender: Sender<MatchStatus>) -> MatchManager {
         Self {
             logger: log_manager,
             match_id: String::new(),
             state: GameState::start_game(),
             protocol_ch: Arc::new(sender),
             current_turn: Arc::new(RwLock::new(Seat::East)),
-            running: Arc::new(RwLock::new(MatchState::Waiting)),
+            status: Arc::new(RwLock::new(MatchStatus::Waiting)),
         }
     }
 
@@ -90,6 +103,8 @@ impl MatchManager {
 }
 
 impl MatchManager {
+    pub async fn start_match(&self) {}
+
     pub async fn check_ready(&self) -> Result<bool, Error> {
         let player_pool = self.state.player_pool.read().await;
         // Check if there are four players connected
@@ -111,6 +126,12 @@ impl MatchManager {
             .ok_or(Error::MatchStartFailed(155))?;
 
         return Ok(true);
+    }
+
+    pub async fn change_status(&self, status: MatchStatus) {
+        let mut status_guard = self.status.write().await;
+        self.protocol_ch.send(status.to_owned()).await;
+        *status_guard = status;
     }
 
     pub async fn wrap(&self) {

@@ -5,7 +5,7 @@ use tokio::{
 
 use crate::utils::errors::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum PacketKind {
     Ping = 0,
     Connection = 1,
@@ -14,6 +14,7 @@ pub enum PacketKind {
     ActionDone = 4,
     ActionFail = 5,
     Error = 6,
+    MatchStatus = 7,
 }
 
 impl PacketKind {
@@ -26,6 +27,7 @@ impl PacketKind {
             4 => Some(Self::ActionDone),
             5 => Some(Self::ActionFail),
             6 => Some(Self::Error),
+            7 => Some(Self::MatchStatus),
             _ => None,
         }
     }
@@ -39,10 +41,12 @@ impl PacketKind {
             PacketKind::ActionDone => [0x04, 0x00, 0x00, 0x00],
             PacketKind::ActionFail => [0x05, 0x00, 0x00, 0x00],
             PacketKind::Error => [0x06, 0x00, 0x00, 0x00],
+            PacketKind::MatchStatus => [0x07, 0x00, 0x00, 0x00],
         }
     }
 }
 
+#[derive(Clone)]
 pub struct Packet {
     pub id: i32,
     pub size: i32,

@@ -46,6 +46,8 @@ impl ClientManager {
             let _ = match Packet::from_bytes(&buffer[..read_bytes]) {
                 Err(error) => stream.send_packet(&Packet::error(0, error)).await,
                 Ok(packet) => match packet.kind {
+                    //
+                    // CONNECTION
                     PacketKind::Connection => match self.protocol.handle_connect(&packet).await {
                         Err(error) => stream.send_packet(&Packet::error(packet.id, error)).await,
                         Ok(player) => {
@@ -58,6 +60,8 @@ impl ClientManager {
                             return;
                         }
                     },
+                    //
+                    // RECONNECTION
                     PacketKind::Reconnection => match self.protocol.handle_reconnect(&packet) {
                         Err(error) => stream.send_packet(&Packet::error(packet.id, error)).await,
                         Ok(request) => match self.client_pool.read().await.get(&request.id) {

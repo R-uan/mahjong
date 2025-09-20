@@ -7,7 +7,7 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, broadcast};
 use tokio::time::sleep;
 
 pub struct Client {
@@ -18,6 +18,7 @@ pub struct Client {
     pub addr: Arc<RwLock<SocketAddr>>,
     pub read_half: Arc<RwLock<OwnedReadHalf>>,
     pub write_half: Arc<RwLock<OwnedWriteHalf>>,
+    pub gsrx: Arc<RwLock<broadcast::Receiver<Packet>>>,
 }
 
 impl Client {
@@ -27,10 +28,12 @@ impl Client {
         stream: TcpStream,
         player: Arc<Player>,
         protocol: Arc<Protocol>,
+        gsrx: Arc<RwLock<broadcast::Receiver<Packet>>>,
     ) -> Arc<Self> {
         let (read, write) = stream.into_split();
         Arc::new(Self {
             id,
+            gsrx,
             player,
             protocol,
             addr: Arc::new(RwLock::new(addr)),
@@ -45,6 +48,7 @@ impl Client {
     // Tries to parse bytes into a Packet struct. No penalty for invalid packets.
     // Calls Protocol to handle each valid packet in a tokio async task.
     pub async fn connect(self: Arc<Self>) {
+        let self_clone = Arc::clone(&self);
         tokio::spawn(async move {
             let mut buffer = [0; 4096];
             *self.listening.write().await = true;
@@ -69,6 +73,15 @@ impl Client {
             }
 
             self.disconnect().await;
+        });
+
+        tokio::spawn(async move {
+            while *self_clone.listening.read().await {
+                let mut gsrx = self_clone.gsrx.write().await;
+                if let Ok(game_state) = gsrx.recv().await {
+                    self_clone.send_packet(game_state).await;
+                }
+            }
         });
     }
 

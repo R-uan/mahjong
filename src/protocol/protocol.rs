@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use tokio::sync::mpsc::{self, Receiver};
+use tokio::sync::{RwLock, broadcast, mpsc};
 
 use crate::{
     game::{
         game_action::{Action, GameAction},
-        match_manager::{MatchManager, MatchState},
+        match_manager::{MatchManager, MatchStatus},
         player::Player,
     },
     network::client::Client,
@@ -15,18 +15,45 @@ use crate::{
 pub struct Protocol {
     logger: Arc<LogManager>,
     match_manager: Arc<MatchManager>,
-    match_manager_ch: Receiver<MatchState>,
+    bctx: Arc<RwLock<broadcast::Sender<Packet>>>,
+    bcrx: Arc<RwLock<broadcast::Receiver<Packet>>>,
+    mmch: Arc<RwLock<mpsc::Receiver<MatchStatus>>>,
 }
 
 impl Protocol {
     pub fn new(log_manager: Arc<LogManager>) -> Self {
         let (sender, receiver) = mpsc::channel(5);
+        let (bctx, bcrx) = broadcast::channel::<Packet>(4);
+
         let match_manager = MatchManager::new_instance(log_manager.clone(), sender);
         Self {
             logger: log_manager,
-            match_manager_ch: receiver,
+            bcrx: Arc::new(RwLock::new(bcrx)),
+            bctx: Arc::new(RwLock::new(bctx)),
+            mmch: Arc::new(RwLock::new(receiver)),
             match_manager: Arc::new(match_manager),
         }
+    }
+
+    async fn handle_game_state(self: Arc<Self>) {
+        let self_clone = Arc::clone(&self);
+        tokio::spawn(async move {
+            let match_status = self_clone.match_manager.status.read().await;
+            while *match_status == MatchStatus::Ongoing {}
+        });
+    }
+
+    async fn handle_match_status(self: Arc<Self>) {
+        let self_clone = Arc::clone(&self);
+        let match_clone = Arc::clone(&self.match_manager);
+        tokio::spawn(async move {
+            while *match_clone.status.read().await == MatchStatus::Ongoing {
+                let mut mmch = self.mmch.write().await;
+                if let Some(status) = mmch.recv().await {
+                    todo!()
+                }
+            }
+        });
     }
 
     pub async fn handle_packet(self: Arc<Self>, client: Arc<Client>, packet: Packet) {

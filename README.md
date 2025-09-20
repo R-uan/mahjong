@@ -9,10 +9,16 @@
 - GameManager - handles the game state and the game logic.
 
 #### Gameplay loop
-- Game starts, east if the first player.
-- East draw a tile, server waits for his discard
-- Once discarded, the server checks for win condition, if none, go to next player
-- next player draw...
+- Once the match status is ready, it starts the gameplay loop
+- The first player (east) draws first and then is prompted to discard
+
+#### Match Manager to Protocol to Client communication
+Once the Match status is ongoing
+- Client sends a game action
+- When the game action is successfully applied (eg: draw, discard):
+  - Draw action: the drawn tile is sent to the client that drawn it.
+  - Discard action: the discarded tile is sent to all clients.
+
 
 ### TODO
 - Player round loop (Draw, Discard, Next Player, Repeat)
@@ -22,6 +28,7 @@
 - ~~Remove authentication requirement and make it "guest" only~~
 - ~~Move client join handling to protocol~~
 - Finish the MatchManager > Protocol communication
+- Figure out how to quickstart the match
 
 #### Error Codes
 
