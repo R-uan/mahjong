@@ -1,16 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
-use crate::
-    game::{
-        player::{Player, Seat},
-        tiles::{Tile, TileType},
-    };
+use crate::game::{
+    player::{Player, Seat},
+    tiles::{Tile, TileKind},
+};
 
 pub struct GameState {
     pub turn: Arc<RwLock<i32>>,
     pub wall: Arc<RwLock<Vec<Arc<Tile>>>>,
-    pub last_discard: Arc<RwLock<Option<TileType>>>,
+    pub last_discard: Arc<RwLock<Option<TileKind>>>,
     pub player_pool: Arc<RwLock<HashMap<Seat, Arc<Player>>>>,
 }
 

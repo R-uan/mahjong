@@ -1,3 +1,4 @@
 pub mod errors;
 pub mod log_manager;
 pub mod models;
+pub mod types;

@@ -23,14 +23,16 @@ Once the Match status is ongoing
 ### TODO
 - Player round loop (Draw, Discard, Next Player, Repeat)
 - ~~Add Player hand validation (so they can draw the correct amount)~~ 
-- Remake package types (Game Actions should be types)
 - Remake protocol package handling
 - ~~Remove authentication requirement and make it "guest" only~~
 - ~~Move client join handling to protocol~~
-- Finish the MatchManager > Protocol communication
+- ~~Finish the MatchManager > Protocol communication~~
 - Figure out how to quickstart the match
 
 #### Error Codes
+
+#### Server Related Errors [1-50]
+- 10 : Could not serialize initial player view.
 
 ##### Client Related Errors [51-100]
 - 55 : Client not found on reconnection request
@@ -50,5 +52,6 @@ Once the Match status is ongoing
 - 155 : South seat is not occupied
 - 161 : Unable to draw tile (Hand Full).
 - 162 : Unable to draw tile (Wall Empty).
-- 163 : Unable to discard tile (Tile not in hand)
-
+- 163 : Unable to draw tile (Not player's turn).
+- 164 : Unable to discard tile (Tile not in hand)
+- 165 : Unable to discard tile (Not player's turn).

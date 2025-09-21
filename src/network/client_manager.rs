@@ -3,6 +3,7 @@ use crate::protocol::packet::{Packet, PacketKind, WriteBytesExt};
 use crate::protocol::protocol::Protocol;
 use crate::utils::errors::Error;
 use crate::utils::log_manager::LogManager;
+use crate::utils::types::ClientPool;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -13,11 +14,13 @@ use tokio::sync::RwLock;
 pub struct ClientManager {
     pub logger: Arc<LogManager>,
     pub protocol: Arc<Protocol>,
-    pub client_pool: Arc<RwLock<HashMap<String, Arc<Client>>>>,
+    pub client_pool: ClientPool,
 }
 
 impl ClientManager {
-    pub fn new_manager(protocol: Arc<Protocol>, logger: Arc<LogManager>) -> Self {
+    pub async fn new(logger: Arc<LogManager>) -> Self {
+        let client_pool: ClientPool = Arc::new(RwLock::new(HashMap::default()));
+        let protocol = Protocol::new(Arc::clone(&logger), Arc::clone(&client_pool)).await;
         Self {
             logger,
             protocol,
@@ -29,65 +32,81 @@ impl ClientManager {
     // Client has ~~five~~ one attempt~~s~~ to send a connection packet.
     // Create a Client struct when/if successfully authenticated.
     // Store client and run the main listen loop for the definitive Client.
-    pub async fn accept(&self, mut stream: TcpStream, addr: SocketAddr) {
-        let mut attempts = 0;
-        let mut buffer = [0; 1024];
+    pub async fn accept(self: Arc<Self>, mut stream: TcpStream, addr: SocketAddr) {
+        tokio::spawn(async move {
+            let mut attempts = 0;
+            let mut buffer = [0; 1024];
 
-        while attempts < 5 {
-            let read_bytes = match stream.read(&mut buffer).await {
-                Ok(0) => break,
-                Ok(n) => n,
-                Err(_) => {
-                    attempts += 1;
-                    continue;
-                }
-            };
+            while attempts < 5 {
+                let read_bytes = match stream.read(&mut buffer).await {
+                    Ok(0) => break,
+                    Ok(n) => n,
+                    Err(_) => {
+                        attempts += 1;
+                        continue;
+                    }
+                };
 
-            let _ = match Packet::from_bytes(&buffer[..read_bytes]) {
-                Err(error) => stream.send_packet(&Packet::error(0, error)).await,
-                Ok(packet) => match packet.kind {
-                    //
-                    // CONNECTION
-                    PacketKind::Connection => match self.protocol.handle_connect(&packet).await {
-                        Err(error) => stream.send_packet(&Packet::error(packet.id, error)).await,
-                        Ok(player) => {
-                            let protocol = self.protocol.clone();
-                            let id = player.id.read().await.to_owned();
-                            let client =
-                                Client::new(id.to_owned(), addr, stream, player, protocol).await;
-                            Arc::clone(&client).connect().await;
-                            self.client_pool.write().await.insert(id, client);
-                            return;
-                        }
-                    },
-                    //
-                    // RECONNECTION
-                    PacketKind::Reconnection => match self.protocol.handle_reconnect(&packet) {
-                        Err(error) => stream.send_packet(&Packet::error(packet.id, error)).await,
-                        Ok(request) => match self.client_pool.read().await.get(&request.id) {
-                            None => {
-                                stream
-                                    .send_packet(&Packet::error(
-                                        packet.id,
-                                        Error::ReconnectionFailed(55),
-                                    ))
-                                    .await
+                let _ = match Packet::from_bytes(&buffer[..read_bytes]) {
+                    Err(error) => stream.send_packet(&Packet::error(0, error)).await,
+                    Ok(packet) => match packet.kind {
+                        //
+                        // CONNECTION
+                        PacketKind::Connection => match self.protocol.handle_connect(&packet).await
+                        {
+                            Err(error) => {
+                                stream.send_packet(&Packet::error(packet.id, error)).await
                             }
-                            Some(client) => {
-                                Arc::clone(&client).reconnect(stream, addr).await;
+                            Ok(player) => {
+                                let protocol = self.protocol.clone();
+                                let gsrx = Arc::clone(&protocol.gsrx);
+                                let id = player.id.read().await.to_owned();
+                                let client = Client::new(
+                                    id.to_owned(),
+                                    addr,
+                                    stream,
+                                    player,
+                                    protocol,
+                                    gsrx,
+                                )
+                                .await;
+                                Arc::clone(&client).connect().await;
+                                self.client_pool.write().await.insert(id, client);
+                                let _ = self.protocol.match_manager.check_ready().await;
                                 return;
                             }
                         },
+                        //
+                        // RECONNECTION
+                        PacketKind::Reconnection => match self.protocol.handle_reconnect(&packet) {
+                            Err(error) => {
+                                stream.send_packet(&Packet::error(packet.id, error)).await
+                            }
+                            Ok(request) => match self.client_pool.read().await.get(&request.id) {
+                                None => {
+                                    stream
+                                        .send_packet(&Packet::error(
+                                            packet.id,
+                                            Error::ReconnectionFailed(55),
+                                        ))
+                                        .await
+                                }
+                                Some(client) => {
+                                    Arc::clone(&client).reconnect(stream, addr).await;
+                                    return;
+                                }
+                            },
+                        },
+                        _ => {
+                            stream
+                                .send_packet(&Packet::error(packet.id, Error::ConnectionNeeded))
+                                .await
+                        }
                     },
-                    _ => {
-                        stream
-                            .send_packet(&Packet::error(packet.id, Error::ConnectionNeeded))
-                            .await
-                    }
-                },
-            };
+                };
 
-            attempts += 1;
-        }
+                attempts += 1;
+            }
+        });
     }
 }

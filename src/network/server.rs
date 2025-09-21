@@ -1,6 +1,5 @@
 use crate::network::client_manager::ClientManager;
-use crate::protocol::protocol::Protocol;
-use crate::utils::log_manager::{LogLevel, LogManager};
+use crate::utils::log_manager::LogManager;
 use std::io::Error;
 use std::{net::Ipv4Addr, sync::Arc};
 use tokio::{net::TcpListener, sync::RwLock};
@@ -19,16 +18,15 @@ impl Server {
         let host = Ipv4Addr::new(127, 0, 0, 1);
         let listener = TcpListener::bind((host, port)).await?;
 
-        let lm = LogManager::new_instance(port + 1, running.clone()).await?;
-        let protocol = Protocol::new(Arc::clone(&lm));
-        let cm = ClientManager::new_manager(Arc::new(protocol), Arc::clone(&lm));
+        let lm = LogManager::new(port + 1, running.clone()).await?;
+        let cm = ClientManager::new(Arc::clone(&lm)).await;
 
         let server = Server {
             port,
+            running,
             logger: lm,
             socket: Arc::new(listener),
             client_manager: Arc::new(cm),
-            running: Arc::new(RwLock::new(false)),
         };
 
         return Ok(server);
@@ -39,33 +37,19 @@ impl Server {
 
         println!("Server running on port {}", &self.port);
         self.logger
-            .send(
-                LogLevel::Debug,
-                &format!("Server running on port {}", &self.port),
-                "SERVER",
-            )
+            .debug(format!("Server running on port {}", &self.port), "SERVER")
             .await;
 
         while *self.running.read().await {
             match self.socket.accept().await {
+                Err(_) => continue,
                 Ok((stream, addr)) => {
                     self.logger
-                        .send(
-                            LogLevel::Info,
-                            &format!("New client connected {addr}"),
-                            "SERVER",
-                        )
+                        .info(format!("New client connected {addr}"), "SERVER")
                         .await;
-
-                    tokio::spawn({
-                        let server = self.clone();
-                        async move {
-                            server.client_manager.accept(stream, addr).await;
-                        }
-                    });
+                    Arc::clone(&self.client_manager).accept(stream, addr).await;
                     continue;
                 }
-                Err(_) => {}
             }
         }
     }

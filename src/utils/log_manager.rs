@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{RwLock};
+use tokio::sync::RwLock;
 
 pub struct LogManager {
     pub socket: TcpListener,
@@ -18,7 +18,7 @@ pub struct LoggerClient {
 }
 
 impl LogManager {
-    pub async fn new_instance(port: u16, running: Arc<RwLock<bool>>) -> Result<Arc<Self>, Error> {
+    pub async fn new(port: u16, running: Arc<RwLock<bool>>) -> Result<Arc<Self>, Error> {
         let host = Ipv4Addr::new(127, 0, 0, 1);
 
         let listener = TcpListener::bind((host, port)).await?;
@@ -52,7 +52,23 @@ impl LogManager {
         Ok(Arc::clone(&lm))
     }
 
-    pub async fn send(&self, l: LogLevel, m: &str, t: &str) {
+    pub async fn debug(&self, m: String, t: &str) {
+        self.send(LogLevel::Debug, &m, t).await;
+    }
+
+    pub async fn info(&self, m: String, t: &str) {
+        self.send(LogLevel::Info, &m, t).await;
+    }
+
+    pub async fn error(&self, m: String, t: &str) {
+        self.send(LogLevel::Error, &m, t).await;
+    }
+
+    pub async fn warning(&self, m: String, t: &str) {
+        self.send(LogLevel::Warning, &m, t).await;
+    }
+
+    async fn send(&self, l: LogLevel, m: &str, t: &str) {
         let entry = LogEntry::new(l, m, t);
         let mut cleanup: Vec<usize> = Vec::new();
         if let Ok(encoded) = serde_cbor::to_vec(&entry) {
@@ -71,8 +87,6 @@ impl LogManager {
             let mut clients = self.clients.write().await;
             clients.remove(index);
         }
-
-        todo!()
     }
 }
 

@@ -4,6 +4,9 @@ pub enum Error {
     #[error("network error: failed to authenticate client ({0})")]
     AuthenticationFailed(u16),
 
+    #[error("SERVER ERROR: ({0})")]
+    SerializationFailed(u16),
+
     // Client Related Errors
     #[error("CLIENT ERROR ({0})")]
     ReconnectionFailed(u16),

@@ -1,17 +1,14 @@
 use crate::{
     game::{
-        game_action::{Action, GameAction},
+        game_action::GameAction,
         game_state::GameState,
         player::{Player, Seat},
         tiles::Tile,
     },
-    utils::{
-        errors::Error,
-        log_manager::{LogLevel, LogManager},
-    },
+    utils::{errors::Error, log_manager::LogManager},
 };
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc::Sender};
+use tokio::sync::{RwLock, watch};
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum MatchStatus {
@@ -40,21 +37,10 @@ pub struct MatchManager {
     logger: Arc<LogManager>,
     current_turn: Arc<RwLock<Seat>>,
     pub status: Arc<RwLock<MatchStatus>>,
-    protocol_ch: Arc<Sender<MatchStatus>>,
+    sttx: Arc<watch::Sender<MatchStatus>>,
 }
 
 impl MatchManager {
-    pub fn new_instance(log_manager: Arc<LogManager>, sender: Sender<MatchStatus>) -> MatchManager {
-        Self {
-            logger: log_manager,
-            match_id: String::new(),
-            state: GameState::start_game(),
-            protocol_ch: Arc::new(sender),
-            current_turn: Arc::new(RwLock::new(Seat::East)),
-            status: Arc::new(RwLock::new(MatchStatus::Waiting)),
-        }
-    }
-
     pub async fn next_player(&self) -> Result<Arc<Player>, Error> {
         let mut guard = self.current_turn.write().await;
         let next_seat = match *guard {
@@ -72,6 +58,10 @@ impl MatchManager {
     }
 
     pub async fn draw(&self, player: Arc<Player>) -> Result<Arc<Tile>, Error> {
+        if *self.current_turn.read().await != *player.seat.read().await {
+            return Err(Error::DrawFailed(163));
+        }
+
         let mut hand = player.view.hand.write().await;
         if hand.len() >= 14 {
             return Err(Error::DrawFailed(161));
@@ -91,19 +81,28 @@ impl MatchManager {
 
     pub async fn discard(&self, player: Arc<Player>, action: GameAction) -> Result<bool, Error> {
         if *self.current_turn.read().await != *player.seat.read().await {
-            return Ok(false);
+            return Err(Error::DiscardFailed(165));
         }
 
         let tile = action.target.ok_or(Error::TileParsingFailed)?;
         match player.discard_tile(&tile).await {
             true => return Ok(true),
-            false => return Err(Error::DiscardFailed(163)),
+            false => return Err(Error::DiscardFailed(164)),
         };
     }
 }
 
 impl MatchManager {
-    pub async fn start_match(&self) {}
+    pub fn new(log_manager: Arc<LogManager>, sender: watch::Sender<MatchStatus>) -> MatchManager {
+        Self {
+            logger: log_manager,
+            match_id: String::new(),
+            sttx: Arc::new(sender),
+            state: GameState::start_game(),
+            current_turn: Arc::new(RwLock::new(Seat::East)),
+            status: Arc::new(RwLock::new(MatchStatus::Waiting)),
+        }
+    }
 
     pub async fn check_ready(&self) -> Result<bool, Error> {
         let player_pool = self.state.player_pool.read().await;
@@ -125,46 +124,14 @@ impl MatchManager {
             .get(&Seat::South)
             .ok_or(Error::MatchStartFailed(155))?;
 
+        self.change_status(MatchStatus::Ready).await;
         return Ok(true);
     }
 
-    pub async fn change_status(&self, status: MatchStatus) {
+    async fn change_status(&self, status: MatchStatus) {
         let mut status_guard = self.status.write().await;
-        self.protocol_ch.send(status.to_owned()).await;
+        let _ = self.sttx.send(status.to_owned()).unwrap();
         *status_guard = status;
-    }
-
-    pub async fn wrap(&self) {
-        todo!()
-    }
-
-    pub async fn apply_actions(&self, p: Arc<Player>, a: GameAction) -> Result<bool, Error> {
-        let result = match a.action {
-            Action::DISCARD => {
-                let target = a.target.ok_or(Error::TileParsingFailed)?;
-                return Ok(p.discard_tile(&target).await);
-            }
-            _ => Err(Error::GameActionFailed),
-        };
-
-        self.logger
-            .send(
-                LogLevel::Info,
-                &format!(
-                    "{} {} {}",
-                    &p.alias.read().await,
-                    &a.action,
-                    if let Some(tile) = &a.target {
-                        &tile.kind.to_string()
-                    } else {
-                        ""
-                    }
-                ),
-                "Game Manager",
-            )
-            .await;
-
-        return result;
     }
 
     pub async fn get_free_seat(&self) -> Option<Seat> {
