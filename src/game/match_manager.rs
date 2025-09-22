@@ -7,10 +7,10 @@ use crate::{
     },
     utils::{errors::Error, log_manager::LogManager},
 };
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 use tokio::sync::{RwLock, watch};
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum MatchStatus {
     Waiting = 0,
     Ready = 1,
@@ -19,8 +19,22 @@ pub enum MatchStatus {
     Interrupted = 4,
 }
 
+impl Display for MatchStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Waiting => "Waiting",
+            Self::Ready => "Ready",
+            Self::Finished => "Finished",
+            Self::Ongoing => "Ongoing",
+            Self::Interrupted => "Interrupted",
+        };
+
+        write!(f, "{}", s)
+    }
+}
+
 impl MatchStatus {
-    pub fn wrap(&self) -> [u8; 4] {
+    pub fn bytes(&self) -> [u8; 4] {
         match &self {
             Self::Ready => [0x01, 0x00, 0x00, 0x00],
             Self::Waiting => [0x00, 0x00, 0x00, 0x00],

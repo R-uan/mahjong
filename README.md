@@ -19,6 +19,12 @@ Once the Match status is ongoing
   - Draw action: the drawn tile is sent to the client that drawn it.
   - Discard action: the discarded tile is sent to all clients.
 
+Once the player connects, automatically sends them their hand.
+Once the match status is ready, send a ready MatchStatus to the clients.
+Once they receive the status, they may send the same packet if they are ready
+that will change their player status to Ready, once all 4 players are ready,
+the match status can change to ongoing and start the match.
+
 
 ### TODO
 - Player round loop (Draw, Discard, Next Player, Repeat)

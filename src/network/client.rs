@@ -18,7 +18,7 @@ pub struct Client {
     pub addr: Arc<RwLock<SocketAddr>>,
     pub read_half: Arc<RwLock<OwnedReadHalf>>,
     pub write_half: Arc<RwLock<OwnedWriteHalf>>,
-    pub gsrx: Arc<RwLock<broadcast::Receiver<Packet>>>,
+    pub bcrx: Arc<RwLock<broadcast::Receiver<Packet>>>,
 }
 
 impl Client {
@@ -28,15 +28,15 @@ impl Client {
         stream: TcpStream,
         player: Arc<Player>,
         protocol: Arc<Protocol>,
-        gsrx: Arc<RwLock<broadcast::Receiver<Packet>>>,
+        bcrx: broadcast::Receiver<Packet>,
     ) -> Arc<Self> {
         let (read, write) = stream.into_split();
         Arc::new(Self {
             id,
-            gsrx,
             player,
             protocol,
             addr: Arc::new(RwLock::new(addr)),
+            bcrx: Arc::new(RwLock::new(bcrx)),
             read_half: Arc::new(RwLock::new(read)),
             listening: Arc::new(RwLock::new(false)),
             write_half: Arc::new(RwLock::new(write)),
@@ -48,7 +48,18 @@ impl Client {
     // Tries to parse bytes into a Packet struct. No penalty for invalid packets.
     // Calls Protocol to handle each valid packet in a tokio async task.
     pub async fn connect(self: Arc<Self>) {
-        let self_clone = Arc::clone(&self);
+        tokio::spawn({
+            let self_clone = Arc::clone(&self);
+            async move {
+                let mut bcrx = self_clone.bcrx.write().await;
+                while *self_clone.listening.read().await {
+                    if let Ok(game_state) = bcrx.recv().await {
+                        self_clone.send_packet(game_state).await;
+                    }
+                }
+            }
+        });
+
         tokio::spawn(async move {
             let mut buffer = [0; 4096];
             *self.listening.write().await = true;
@@ -73,15 +84,6 @@ impl Client {
             }
 
             self.disconnect().await;
-        });
-
-        tokio::spawn(async move {
-            while *self_clone.listening.read().await {
-                let mut gsrx = self_clone.gsrx.write().await;
-                if let Ok(game_state) = gsrx.recv().await {
-                    self_clone.send_packet(game_state).await;
-                }
-            }
         });
     }
 

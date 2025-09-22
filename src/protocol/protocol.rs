@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tokio::sync::{RwLock, broadcast, watch};
+use tokio::sync::{broadcast, watch};
 
 use crate::{
     game::{
@@ -23,23 +23,21 @@ pub struct Protocol {
     pub match_manager: Arc<MatchManager>,
     // Global packet broadcaster to all clients.
     // Avoids the necessity to loop through the ClientPool.
-    gstx: Arc<RwLock<broadcast::Sender<Packet>>>,
-    pub gsrx: Arc<RwLock<broadcast::Receiver<Packet>>>,
+    pub bctx: broadcast::Sender<Packet>,
 }
 
 impl Protocol {
     // Principal way to initialize an Protocol instance.
     pub async fn new(log_manager: Arc<LogManager>, client_pool: ClientPool) -> Arc<Self> {
-        let (bctx, bcrx) = broadcast::channel::<Packet>(4);
-        let (sender, receiver) = watch::channel(MatchStatus::Waiting);
-        let match_manager = MatchManager::new(log_manager.clone(), sender);
+        let (bctx, _rx) = broadcast::channel::<Packet>(4);
+        let (mmtx, mmrx) = watch::channel(MatchStatus::Waiting);
+        let match_manager = MatchManager::new(log_manager.clone(), mmtx);
 
         let protocol = Arc::new(Self {
+            mmrx,
+            bctx,
             client_pool,
-            mmrx: receiver,
             logger: log_manager,
-            gsrx: Arc::new(RwLock::new(bcrx)),
-            gstx: Arc::new(RwLock::new(bctx)),
             match_manager: Arc::new(match_manager),
         });
 
@@ -49,13 +47,24 @@ impl Protocol {
 
     // Spawns a task to watch the changes from the match status and deal with each respective status.
     async fn watch_match_status(self: Arc<Self>) {
+        let bctx = self.bctx.clone();
         let mut mmrx = self.mmrx.clone();
         tokio::spawn({
             async move {
                 loop {
-                    match *mmrx.borrow() {
+                    let match_status = *mmrx.borrow();
+
+                    let log_msg = format!("MATCH STATUS CHANGE: {}", &match_status);
+                    self.logger.debug(log_msg, "PROT").await;
+
+                    match &match_status {
+                        MatchStatus::Ready => {
+                            let kind = PacketKind::MatchStatus;
+                            let body = MatchStatus::Ready.bytes();
+                            let packet = Packet::create(0, kind, &body);
+                            let _ = bctx.send(packet);
+                        }
                         MatchStatus::Waiting => {}
-                        MatchStatus::Ready => {}
                         MatchStatus::Finished => {}
                         MatchStatus::Ongoing => {}
                         MatchStatus::Interrupted => {}

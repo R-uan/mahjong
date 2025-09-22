@@ -32,8 +32,8 @@ impl PacketKind {
         }
     }
 
-    pub fn to_bytes(t: &PacketKind) -> [u8; 4] {
-        match t {
+    pub fn bytes(&self) -> [u8; 4] {
+        match self {
             PacketKind::Ping => [0x00, 0x00, 0x00, 0x00],
             PacketKind::Connection => [0x01, 0x00, 0x00, 0x00],
             PacketKind::Reconnection => [0x02, 0x00, 0x00, 0x00],
@@ -46,7 +46,7 @@ impl PacketKind {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Packet {
     pub id: i32,
     pub size: i32,
@@ -118,7 +118,7 @@ impl ToBytes for Packet {
     fn to_bytes(&self) -> Vec<u8> {
         let id = i32::to_le_bytes(self.id);
         let size = i32::to_le_bytes(self.size);
-        let kind = PacketKind::to_bytes(&self.kind);
+        let kind = PacketKind::bytes(&self.kind);
         let mut packet = Vec::new();
 
         packet.extend(id);

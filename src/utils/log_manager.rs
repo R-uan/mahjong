@@ -8,9 +8,9 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
 
 pub struct LogManager {
-    pub socket: TcpListener,
-    pub running: Arc<RwLock<bool>>,
-    pub clients: Arc<RwLock<Vec<LoggerClient>>>,
+    socket: TcpListener,
+    running: Arc<RwLock<bool>>,
+    clients: Arc<RwLock<Vec<LoggerClient>>>,
 }
 
 pub struct LoggerClient {
