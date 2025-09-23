@@ -3,7 +3,10 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::{game::tiles::Tile, utils::errors::Error};
+use crate::{
+    game::tiles::Tile,
+    utils::{errors::Error, models::JoinRequest},
+};
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum Seat {
@@ -17,6 +20,7 @@ pub enum PlayerState {
     IDLE,
     DRAW,
     DISCARD,
+    READY,
 }
 
 pub struct Player {
@@ -35,14 +39,24 @@ pub struct View {
     pub discarded: Arc<RwLock<Vec<Arc<Tile>>>>,
 }
 
+impl View {
+    pub fn new(hand: Vec<Arc<Tile>>) -> Self {
+        View {
+            open: String::new(),
+            hand: Arc::new(RwLock::new(hand)),
+            discarded: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+}
+
 impl Player {
-    pub fn new(seat: Seat, id: &str, alias: &str) -> Player {
+    pub fn new(seat: Seat, req: &JoinRequest, hand: Vec<Arc<Tile>>) -> Player {
         Player {
-            view: Arc::new(View::default()),
+            view: Arc::new(View::new(hand)),
             seat: Arc::new(RwLock::new(seat)),
             connected: Arc::new(RwLock::new(false)),
-            id: Arc::new(RwLock::new(id.to_string())),
-            alias: Arc::new(RwLock::new(alias.to_string())),
+            id: Arc::new(RwLock::new(req.id.to_string())),
+            alias: Arc::new(RwLock::new(req.alias.to_string())),
             player_state: Arc::new(RwLock::new(PlayerState::IDLE)),
         }
     }
@@ -63,6 +77,14 @@ impl Player {
     pub async fn get_initial_view(&self) -> Result<Vec<u8>, Error> {
         let view = InitialPlayerView::get(&self).await;
         serde_cbor::to_vec(&view).map_err(|_| Error::SerializationFailed(10))
+    }
+
+    pub async fn set_ready(&self) {
+        *self.player_state.write().await = PlayerState::READY;
+    }
+
+    pub async fn set_idle(&self) {
+        *self.player_state.write().await = PlayerState::IDLE;
     }
 }
 

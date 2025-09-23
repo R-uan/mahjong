@@ -5,7 +5,7 @@ use crate::{
         player::{Player, Seat},
         tiles::Tile,
     },
-    utils::{errors::Error, log_manager::LogManager},
+    utils::{errors::Error, log_manager::LogManager, models::JoinRequest},
 };
 use std::{fmt::Display, sync::Arc};
 use tokio::sync::{RwLock, watch};
@@ -45,10 +45,13 @@ impl MatchStatus {
     }
 }
 
+// RULES FOR THIS MANAGER
+// - IT SHOULD NOT HAVE TO CREATE ANY PACKETS AS IT HAS NO DIRECT ACCESS TO PROTOCOL
+//
 pub struct MatchManager {
     match_id: String,
-    state: GameState,
     logger: Arc<LogManager>,
+    pub state: Arc<GameState>,
     current_turn: Arc<RwLock<Seat>>,
     pub status: Arc<RwLock<MatchStatus>>,
     sttx: Arc<watch::Sender<MatchStatus>>,
@@ -112,34 +115,32 @@ impl MatchManager {
             logger: log_manager,
             match_id: String::new(),
             sttx: Arc::new(sender),
-            state: GameState::start_game(),
+            state: Arc::new(GameState::start_game()),
             current_turn: Arc::new(RwLock::new(Seat::East)),
             status: Arc::new(RwLock::new(MatchStatus::Waiting)),
         }
     }
 
-    pub async fn check_ready(&self) -> Result<bool, Error> {
+    async fn check_seats(&self) -> Result<(), Error> {
         let player_pool = self.state.player_pool.read().await;
-        // Check if there are four players connected
-        if player_pool.len() == 4 {
-            return Err(Error::MatchStartFailed(151));
-        }
+        if player_pool.len() != 4 { return Err(Error::MatchStartFailed(151)); }
+        player_pool.get(&Seat::East).ok_or(Error::MatchStartFailed(152))?;
+        player_pool.get(&Seat::West).ok_or(Error::MatchStartFailed(153))?;
+        player_pool.get(&Seat::North).ok_or(Error::MatchStartFailed(154))?;
+        player_pool.get(&Seat::South).ok_or(Error::MatchStartFailed(155))?;
+        Ok(())
+    }
 
-        let _ = player_pool
-            .get(&Seat::East)
-            .ok_or(Error::MatchStartFailed(152))?;
-        let _ = player_pool
-            .get(&Seat::West)
-            .ok_or(Error::MatchStartFailed(153))?;
-        let _ = player_pool
-            .get(&Seat::North)
-            .ok_or(Error::MatchStartFailed(154))?;
-        let _ = player_pool
-            .get(&Seat::South)
-            .ok_or(Error::MatchStartFailed(155))?;
+    pub async fn check_ready(&self) {
+        let log_msg = match self.check_seats().await {
+            Err(error) => format!("Match is not ready yet: {error}."),
+            Ok(_) => {
+                self.change_status(MatchStatus::Ready).await;
+                format!("Match is ready for initialization.")
+            },
+        };
 
-        self.change_status(MatchStatus::Ready).await;
-        return Ok(true);
+        self.logger.debug(log_msg, "MM").await;
     }
 
     async fn change_status(&self, status: MatchStatus) {
@@ -163,11 +164,19 @@ impl MatchManager {
         };
     }
 
-    pub async fn assign_player(&self, id: &str, alias: &str) -> Result<Arc<Player>, Error> {
+    pub async fn get_initial_hand(&self) -> Vec<Arc<Tile>> {
+        let mut wall_guard = self.state.wall.write().await;
+        let len = wall_guard.len();
+        let drain_start = len.saturating_sub(13);
+        wall_guard.drain(drain_start..).collect()
+    }
+
+    pub async fn assign_player(&self, req: &JoinRequest) -> Result<Arc<Player>, Error> {
         match self.get_free_seat().await {
             None => Err(Error::NoAvailableSeats),
             Some(seat) => {
-                let player = Arc::new(Player::new(seat.clone(), id, alias));
+                let hand = self.get_initial_hand().await;
+                let player = Arc::new(Player::new(seat.clone(), &req, hand));
                 let mut player_pool_guard = self.state.player_pool.write().await;
                 player_pool_guard.insert(seat, player.clone());
                 return Ok(player);

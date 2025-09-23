@@ -53,8 +53,8 @@ impl Client {
             async move {
                 let mut bcrx = self_clone.bcrx.write().await;
                 while *self_clone.listening.read().await {
-                    if let Ok(game_state) = bcrx.recv().await {
-                        self_clone.send_packet(game_state).await;
+                    if let Ok(global_packet) = bcrx.recv().await {
+                        self_clone.send_packet(&global_packet).await;
                     }
                 }
             }
@@ -74,7 +74,7 @@ impl Client {
                 };
 
                 match Packet::from_bytes(&buffer[..bytes_read]) {
-                    Err(error) => self.send_packet(Packet::error(0, error)).await,
+                    Err(error) => self.send_packet(&Packet::error(0, error)).await,
                     Ok(packet) => {
                         Arc::clone(&self.protocol)
                             .handle_packet(Arc::clone(&self), packet)
@@ -100,11 +100,11 @@ impl Client {
         *self.player.connected.write().await = false;
     }
 
-    pub async fn send_packet(&self, packet: Packet) {
+    pub async fn send_packet(&self, packet: &Packet) {
         let mut tries = 0;
         while tries < 30 {
             let mut write_guard = self.write_half.write().await;
-            if let Err(_) = write_guard.send_packet(&packet).await {
+            if let Err(_) = write_guard.send_packet(packet).await {
                 sleep(Duration::from_secs(2)).await;
                 tries += 1;
                 continue;

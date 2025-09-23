@@ -8,26 +8,26 @@ use crate::utils::errors::Error;
 #[derive(Debug, PartialEq, Clone)]
 pub enum PacketKind {
     Ping = 0,
-    Connection = 1,
-    Reconnection = 2,
-    GameAction = 3,
-    ActionDone = 4,
-    ActionFail = 5,
-    Error = 6,
-    MatchStatus = 7,
+    Setup = 1,
+    GameAction = 2,
+    ActionDone = 3,
+    ActionFail = 4,
+    Error = 5,
+    MatchStatus = 6,
+    Pong = 7,
 }
 
 impl PacketKind {
     pub fn from_byte(byte: u32) -> Option<Self> {
         match byte as i32 {
             0 => Some(Self::Ping),
-            1 => Some(Self::Connection),
-            2 => Some(Self::Reconnection),
-            3 => Some(Self::GameAction),
-            4 => Some(Self::ActionDone),
-            5 => Some(Self::ActionFail),
-            6 => Some(Self::Error),
-            7 => Some(Self::MatchStatus),
+            1 => Some(Self::Setup),
+            2 => Some(Self::GameAction),
+            3 => Some(Self::ActionDone),
+            4 => Some(Self::ActionFail),
+            5 => Some(Self::Error),
+            6 => Some(Self::MatchStatus),
+            7 => Some(Self::Pong),
             _ => None,
         }
     }
@@ -35,13 +35,13 @@ impl PacketKind {
     pub fn bytes(&self) -> [u8; 4] {
         match self {
             PacketKind::Ping => [0x00, 0x00, 0x00, 0x00],
-            PacketKind::Connection => [0x01, 0x00, 0x00, 0x00],
-            PacketKind::Reconnection => [0x02, 0x00, 0x00, 0x00],
-            PacketKind::GameAction => [0x03, 0x00, 0x00, 0x00],
-            PacketKind::ActionDone => [0x04, 0x00, 0x00, 0x00],
-            PacketKind::ActionFail => [0x05, 0x00, 0x00, 0x00],
-            PacketKind::Error => [0x06, 0x00, 0x00, 0x00],
-            PacketKind::MatchStatus => [0x07, 0x00, 0x00, 0x00],
+            PacketKind::Setup => [0x01, 0x00, 0x00, 0x00],
+            PacketKind::GameAction => [0x02, 0x00, 0x00, 0x00],
+            PacketKind::ActionDone => [0x03, 0x00, 0x00, 0x00],
+            PacketKind::ActionFail => [0x04, 0x00, 0x00, 0x00],
+            PacketKind::Error => [0x05, 0x00, 0x00, 0x00],
+            PacketKind::MatchStatus => [0x06, 0x00, 0x00, 0x00],
+            PacketKind::Pong => [0x07, 0x00, 0x00, 0x00],
         }
     }
 }

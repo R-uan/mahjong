@@ -2,7 +2,7 @@
 pub enum Error {
     // Server Related Errors
     #[error("network error: failed to authenticate client ({0})")]
-    AuthenticationFailed(u16),
+    ConnectionFailed(u16),
 
     #[error("SERVER ERROR: ({0})")]
     SerializationFailed(u16),
@@ -13,6 +13,9 @@ pub enum Error {
 
     #[error("CLIENT ERROR (56) ")]
     ConnectionNeeded,
+
+    #[error("CLIENT ERROR ({0})")]
+    OperationFailed(u16),
 
     // Protocol Related Errors
     #[error("Could not parse received packet ({0})")]
@@ -27,9 +30,6 @@ pub enum Error {
     // Game Relasted Errors
     #[error("request error: failed to join match")]
     MatchAlreadyFull,
-
-    #[error("game error: failed to apply game action")]
-    GameActionFailed,
 
     #[error("game error: unable to draw a tile ({0})")]
     DrawFailed(u16),

@@ -43,6 +43,7 @@ the match status can change to ongoing and start the match.
 ##### Client Related Errors [51-100]
 - 55 : Client not found on reconnection request
 - 56 : Client attempted an action before sending a connection packet.
+- 57 : Client's request's operation is not valid for his current state.
 
 ##### Protocol Related Errors [101-150]
 - 101 : Packet format is invalid and could not be parsed.

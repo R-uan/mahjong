@@ -1,4 +1,5 @@
 use crate::network::client::Client;
+use crate::network::setup::Setup;
 use crate::protocol::packet::{Packet, PacketKind, WriteBytesExt};
 use crate::protocol::protocol::Protocol;
 use crate::utils::errors::Error;
@@ -48,72 +49,93 @@ impl ClientManager {
                 };
 
                 let _ = match Packet::from_bytes(&buffer[..read_bytes]) {
-                    Err(error) => stream.send_packet(&Packet::error(0, error)).await,
-                    Ok(packet) => match packet.kind {
-                        //
-                        // CONNECTION (LOGS)
-                        PacketKind::Connection => match self.protocol.handle_connect(&packet).await
-                        {
-                            Err(error) => {
-                                let log_error = format!("{addr}: {}", error.to_string());
-                                self.logger.error(log_error, "CM").await;
-                                stream.send_packet(&Packet::error(packet.id, error)).await
-                            }
-                            Ok(player) => {
-                                let id = player.id.read().await.to_owned();
-                                let protocol = self.protocol.clone();
-                                let bcrx = protocol.bctx.subscribe();
-
-                                let log_msg =
-                                    format!("{addr}: connected as {}", &player.alias.read().await);
-                                self.logger.info(log_msg, "CM").await;
-
-                                let client = Client::new(
-                                    id.to_owned(),
-                                    addr,
-                                    stream,
-                                    player,
-                                    protocol,
-                                    bcrx,
-                                )
-                                .await;
-
-                                Arc::clone(&client).connect().await;
-                                self.client_pool.write().await.insert(id, client);
-                                let _ = self.protocol.match_manager.check_ready().await;
-                                return;
-                            }
-                        },
-                        //
-                        // RECONNECTION (LOGS)
-                        PacketKind::Reconnection => match self.protocol.handle_reconnect(&packet) {
-                            Err(error) => {
-                                let log_error = format!("{addr}: {}", error.to_string());
-                                self.logger.error(log_error, "CM").await;
-                                stream.send_packet(&Packet::error(packet.id, error)).await
-                            }
-                            Ok(request) => match self.client_pool.read().await.get(&request.id) {
-                                None => {
-                                    let error = Error::ReconnectionFailed(55);
-                                    let log_error = format!("{addr}: {}", error.to_string());
-                                    self.logger.error(log_error, "CM").await;
-                                    stream.send_packet(&Packet::error(packet.id, error)).await
-                                }
-                                Some(client) => {
-                                    let log_msg = format!("{addr}: reconnected");
-                                    self.logger.info(log_msg, "CM").await;
-                                    Arc::clone(&client).reconnect(stream, addr).await;
-                                    return;
-                                }
-                            },
-                        },
-                        _ => {
+                    Err(error) => {
+                        let log_error = format!("{addr}: {}", error.to_string());
+                        self.logger.error(log_error, "CM").await;
+                        let id = self.protocol.get_global_id().await;
+                        let _ = stream.send_packet(&Packet::error(id, error)).await;                    
+                    },
+                    Ok(packet) => if packet.kind == PacketKind::Setup {
+                        let Some(operation) = Setup::from(&packet.body[..4]) else {
                             let error = Error::ConnectionNeeded;
                             let log_error = format!("{addr}: {}", error.to_string());
                             self.logger.error(log_error, "CM").await;
-                            stream.send_packet(&Packet::error(packet.id, error)).await
-                        }
-                    },
+                            let _ = stream.send_packet(&Packet::error(packet.id, error)).await;
+                            return;
+                        };
+
+                        match operation {
+                            Setup::Connection => {
+                                match self.protocol.handle_connect(&packet).await {
+                                    Err(error) => {
+                                        let log_error = format!("{addr}: {}", error.to_string());
+                                        self.logger.error(log_error, "CM").await;
+                                        let _ = stream.send_packet(&Packet::error(packet.id, error)).await;
+                                    }
+                                    Ok(player) => {
+                                        let id = player.id.read().await.to_owned();
+                                        let protocol = self.protocol.clone();
+                                        let bcrx = protocol.bctx.subscribe();
+
+                                        let log_msg =
+                                            format!("{addr}: connected as {}", &player.alias.read().await);
+                                        self.logger.info(log_msg, "CM").await;
+
+                                        let client = Client::new(
+                                            id.to_owned(),
+                                            addr,
+                                            stream,
+                                            player,
+                                            protocol,
+                                            bcrx,
+                                        )
+                                        .await;
+
+                                        Arc::clone(&client).connect().await;
+                                        self.client_pool.write().await.insert(id, client);
+                                        self.protocol.match_manager.check_ready().await;
+                                        return;
+                                    }
+                                }
+                            }
+                            Setup::Reconnection => {
+                                match self.protocol.handle_reconnect(&packet) {
+                                    Err(error) => {
+                                        let log_error = format!("{addr}: {}", error.to_string());
+                                        self.logger.error(log_error, "CM").await;
+                                        let _ = stream.send_packet(&Packet::error(packet.id, error)).await;
+                                    }
+                                    Ok(request) => match self.client_pool.read().await.get(&request.id) {
+                                        None => {
+                                            let error = Error::ReconnectionFailed(55);
+                                            let log_error = format!("{addr}: {}", error.to_string());
+                                            self.logger.error(log_error, "CM").await;
+                                            let _ = stream.send_packet(&Packet::error(packet.id, error)).await;
+                                        }
+                                        Some(client) => {
+                                            let log_msg = format!("{addr}: reconnected");
+                                            self.logger.info(log_msg, "CM").await;
+                                            Arc::clone(&client).reconnect(stream, addr).await;
+                                            return;
+                                        }
+                                    },
+                                }
+                            }
+                            _ => {
+                                let error = Error::ConnectionNeeded;
+                                let log_error = format!("{addr}: {}", error.to_string());
+                                self.logger.error(log_error, "CM").await;
+                                let _ = stream.send_packet(&Packet::error(packet.id, error)).await;
+                                return;
+                            }
+                        };
+                    } else {
+                        let error = Error::ConnectionNeeded;
+                        let log_error = format!("{addr}: {}", error.to_string());
+                        self.logger.error(log_error, "CM").await;
+                        let _ = stream.send_packet(&Packet::error(packet.id, error)).await;
+                        return;                    
+                    }
                 };
 
                 attempts += 1;

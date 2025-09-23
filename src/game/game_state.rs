@@ -22,4 +22,8 @@ impl GameState {
             player_pool: Arc::new(RwLock::new(HashMap::new())),
         }
     }
+
+    pub fn get_initial_hand(&self, player: Arc<Player>) {
+        
+    }
 }
