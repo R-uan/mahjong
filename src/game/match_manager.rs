@@ -5,8 +5,9 @@ use crate::{
         player::{Player, Seat},
         tiles::Tile,
     },
-    utils::{errors::Error, log_manager::LogManager, models::JoinRequest},
+    utils::{errors::Error, models::JoinRequest},
 };
+use lolg::Lolg;
 use std::{fmt::Display, sync::Arc};
 use tokio::sync::{RwLock, watch};
 
@@ -50,7 +51,7 @@ impl MatchStatus {
 //
 pub struct MatchManager {
     match_id: String,
-    logger: Arc<LogManager>,
+    logger: Arc<Lolg>,
     pub state: Arc<GameState>,
     current_turn: Arc<RwLock<Seat>>,
     pub status: Arc<RwLock<MatchStatus>>,
@@ -110,7 +111,7 @@ impl MatchManager {
 }
 
 impl MatchManager {
-    pub fn new(log_manager: Arc<LogManager>, sender: watch::Sender<MatchStatus>) -> MatchManager {
+    pub fn new(log_manager: Arc<Lolg>, sender: watch::Sender<MatchStatus>) -> MatchManager {
         Self {
             logger: log_manager,
             match_id: String::new(),
@@ -123,11 +124,21 @@ impl MatchManager {
 
     async fn check_seats(&self) -> Result<(), Error> {
         let player_pool = self.state.player_pool.read().await;
-        if player_pool.len() != 4 { return Err(Error::MatchStartFailed(151)); }
-        player_pool.get(&Seat::East).ok_or(Error::MatchStartFailed(152))?;
-        player_pool.get(&Seat::West).ok_or(Error::MatchStartFailed(153))?;
-        player_pool.get(&Seat::North).ok_or(Error::MatchStartFailed(154))?;
-        player_pool.get(&Seat::South).ok_or(Error::MatchStartFailed(155))?;
+        if player_pool.len() != 4 {
+            return Err(Error::MatchStartFailed(151));
+        }
+        player_pool
+            .get(&Seat::East)
+            .ok_or(Error::MatchStartFailed(152))?;
+        player_pool
+            .get(&Seat::West)
+            .ok_or(Error::MatchStartFailed(153))?;
+        player_pool
+            .get(&Seat::North)
+            .ok_or(Error::MatchStartFailed(154))?;
+        player_pool
+            .get(&Seat::South)
+            .ok_or(Error::MatchStartFailed(155))?;
         Ok(())
     }
 
@@ -137,10 +148,10 @@ impl MatchManager {
             Ok(_) => {
                 self.change_status(MatchStatus::Ready).await;
                 format!("Match is ready for initialization.")
-            },
+            }
         };
 
-        self.logger.debug(log_msg, "MM").await;
+        self.logger.debug(&log_msg).await;
     }
 
     async fn change_status(&self, status: MatchStatus) {

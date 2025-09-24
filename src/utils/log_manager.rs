@@ -2,7 +2,8 @@ use serde::Serialize;
 use std::io::Error;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread::sleep;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
@@ -45,6 +46,20 @@ impl LogManager {
                             lm_clone.clients.write().await.push(client);
                         }
                     }
+                }
+            }
+        });
+
+        tokio::spawn({
+            let lm_clone = Arc::clone(&lm);
+            async move {
+                let mut count = 0;
+                loop {
+                    let msg = format!("Log testing ({count})");
+                    println!("{}", &msg);
+                    lm_clone.send(LogLevel::Debug, &msg, "LM").await;
+                    count += 1;
+                    sleep(Duration::from_secs(2));
                 }
             }
         });

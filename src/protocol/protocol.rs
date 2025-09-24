@@ -1,3 +1,4 @@
+use lolg::Lolg;
 use std::sync::Arc;
 use tokio::sync::{Mutex, broadcast, watch};
 
@@ -9,11 +10,11 @@ use crate::{
     },
     network::{client::Client, setup::Setup},
     protocol::packet::{Packet, PacketKind},
-    utils::{errors::Error, log_manager::LogManager, models::JoinRequest, types::ClientPool},
+    utils::{errors::Error, models::JoinRequest, types::ClientPool},
 };
 
 pub struct Protocol {
-    logger: Arc<LogManager>,
+    logger: Arc<Lolg>,
     client_pool: ClientPool, // Connected client pool (Also held by ClientManager).
     global_id: Arc<Mutex<i32>>, // Id tracker for packets sent by server
     mmrx: watch::Receiver<MatchStatus>, // Watches the MatchStatus that is sent from MatchManager.
@@ -23,11 +24,11 @@ pub struct Protocol {
 
 // PUBLIC METHODS
 impl Protocol {
-    pub async fn new(log_manager: Arc<LogManager>, client_pool: ClientPool) -> Arc<Self> {
+    pub async fn new(log_manager: Arc<Lolg>, client_pool: ClientPool) -> Arc<Self> {
         let (bctx, _rx) = broadcast::channel::<Packet>(4);
         let (mmtx, mmrx) = watch::channel(MatchStatus::Waiting);
         let match_manager = MatchManager::new(log_manager.clone(), mmtx);
-    
+
         let protocol = Arc::new(Self {
             mmrx,
             bctx,
@@ -36,7 +37,7 @@ impl Protocol {
             global_id: Arc::new(Mutex::new(0)),
             match_manager: Arc::new(match_manager),
         });
-    
+
         Arc::clone(&protocol).watch_match_status().await;
         return protocol;
     }
@@ -84,8 +85,7 @@ impl Protocol {
         match GameAction::parse(&p.body) {
             Err(error) => {
                 let addr = client.addr.read().await;
-                let log_msg = format!("{addr}: {}", &error.to_string());
-                self.logger.error(log_msg, "PROTOC").await;
+                self.logger.error(&format!("{addr}: {error}")).await;
                 let packet = Packet::error(p.id, error);
                 client.send_packet(&packet).await;
             }
@@ -117,8 +117,7 @@ impl Protocol {
         let Some(operation) = Setup::from(&packet.body[..4]) else {
             let error = Error::ConnectionNeeded;
             let addr = client.addr.read().await;
-            let log_error = format!("{addr}: {}", error.to_string());
-            self.logger.error(log_error, "CM").await;
+            self.logger.error(&format!("{addr}: {error}")).await;
             let _ = client.send_packet(&Packet::error(packet.id, error)).await;
             return;
         };
@@ -128,23 +127,20 @@ impl Protocol {
                 Ok(view_bytes) => Packet::create(packet.id, PacketKind::Setup, &view_bytes),
                 Err(error) => {
                     let addr = client.addr.read().await;
-                    let log_error = format!("{addr}: {}", error.to_string());
-                    self.logger.error(log_error, "CM").await;
+                    self.logger.error(&format!("{addr}: {error}")).await;
                     Packet::error(packet.id, error)
                 }
             },
             Setup::Ready => {
                 client.player.set_ready().await;
                 let addr = client.addr.read().await;
-                let log_msg = format!("{addr}: is ready.");
-                self.logger.info(log_msg, "PROTOC").await;
+                self.logger.info(&format!("{addr}: is ready.")).await;
                 Packet::create(packet.id, PacketKind::Setup, &[0x00])
             }
             _ => {
                 let error = Error::OperationFailed(57);
                 let addr = client.addr.read().await;
-                let log_error = format!("{addr}: {}", error.to_string());
-                self.logger.error(log_error, "CM").await;
+                self.logger.error(&format!("{addr}: {error}")).await;
                 Packet::error(packet.id, error)
             }
         };
@@ -167,12 +163,10 @@ impl Protocol {
         tokio::spawn({
             async move {
                 loop {
-                    let match_status = *mmrx.borrow();
+                    let status = *mmrx.borrow();
+                    self.logger.debug(&format!("STATUS CHANGE: {status}")).await;
 
-                    let log_msg = format!("MATCH STATUS CHANGE: {}", &match_status);
-                    self.logger.debug(log_msg, "PROT").await;
-
-                    match &match_status {
+                    match &status {
                         MatchStatus::Ready => {
                             let kind = PacketKind::MatchStatus;
                             let body = MatchStatus::Ready.bytes();

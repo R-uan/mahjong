@@ -1,6 +1,9 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     // Server Related Errors
+    #[error("Failed to initialize server ({0})")]
+    InitializationFailed(u16),
+
     #[error("network error: failed to authenticate client ({0})")]
     ConnectionFailed(u16),
 

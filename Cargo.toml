@@ -12,3 +12,4 @@ serde_json = "1.0.143"
 thiserror = "2.0.16"
 tokio = { version = "1.47.1", features = ["full"] }
 tokio-stream = "0.1.17"
+lolg = { git = "https://github.com/R-uan/lolg" }

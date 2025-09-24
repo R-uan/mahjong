@@ -29,7 +29,7 @@ the match status can change to ongoing and start the match.
 ### TODO
 - Player round loop (Draw, Discard, Next Player, Repeat)
 - ~~Add Player hand validation (so they can draw the correct amount)~~ 
-- Remake protocol package handling
+- ~~Remake protocol package handling~~
 - ~~Remove authentication requirement and make it "guest" only~~
 - ~~Move client join handling to protocol~~
 - ~~Finish the MatchManager > Protocol communication~~
@@ -38,6 +38,8 @@ the match status can change to ongoing and start the match.
 #### Error Codes
 
 #### Server Related Errors [1-50]
+- 4 : Failed to bind socket listener.
+- 5 : Failed to initialize Log manager.
 - 10 : Could not serialize initial player view.
 
 ##### Client Related Errors [51-100]
