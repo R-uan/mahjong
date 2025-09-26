@@ -61,7 +61,7 @@ impl Protocol {
 
     // Handles packets of the Connection kind.
     pub async fn handle_connect(&self, packet: &Packet) -> Result<Arc<Player>, Error> {
-        let req = serde_cbor::from_slice::<JoinRequest>(&packet.body)
+        let req = serde_cbor::from_slice::<JoinRequest>(&packet.body[5..])
             .map_err(|_| Error::ConnectionFailed(105))?;
         let player = self.match_manager.assign_player(&req).await?;
         return Ok(player);
@@ -75,7 +75,7 @@ impl Protocol {
 
     // Handles packets of the Reconnection kind.
     pub fn handle_reconnect(&self, packet: &Packet) -> Result<JoinRequest, Error> {
-        return serde_cbor::from_slice::<JoinRequest>(&packet.body)
+        return serde_cbor::from_slice::<JoinRequest>(&packet.body[5..])
             .map_err(|_| Error::ConnectionFailed(105));
     }
 }
@@ -124,7 +124,12 @@ impl Protocol {
 
         let response = match operation {
             Setup::Initialization => match client.player.get_initial_view().await {
-                Ok(view_bytes) => Packet::create(packet.id, PacketKind::Setup, &view_bytes),
+                Ok(view_bytes) => {
+                    let setup = Setup::Initialization.bytes();
+                    let mut body_bytes = setup.to_vec();
+                    body_bytes.extend(view_bytes);
+                    Packet::create(packet.id, PacketKind::Setup, &body_bytes)
+                }
                 Err(error) => {
                     let addr = client.addr.read().await;
                     self.logger.error(&format!("{addr}: {error}")).await;
@@ -154,8 +159,6 @@ impl Protocol {
         client.send_packet(&response).await;
     }
 
-    async fn handle_initialization(&self) {}
-
     // Spawns a task to watch the changes from the match status and deal with each respective status.
     async fn watch_match_status(self: Arc<Self>) {
         let bctx = self.bctx.clone();
@@ -164,8 +167,6 @@ impl Protocol {
             async move {
                 loop {
                     let status = *mmrx.borrow();
-                    self.logger.debug(&format!("STATUS CHANGE: {status}")).await;
-
                     match &status {
                         MatchStatus::Ready => {
                             let kind = PacketKind::MatchStatus;
@@ -175,6 +176,7 @@ impl Protocol {
                             *id += 1;
                             drop(id);
                             let _ = bctx.send(packet);
+                            self.logger.debug(&format!("STATUS CHANGE: {status}")).await;
                         }
                         MatchStatus::Waiting => {}
                         MatchStatus::Finished => {}

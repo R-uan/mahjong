@@ -34,6 +34,8 @@ the match status can change to ongoing and start the match.
 - ~~Move client join handling to protocol~~
 - ~~Finish the MatchManager > Protocol communication~~
 - Figure out how to quickstart the match
+- Create Server's game actions (TURN CHANGE, PLAYER ACTION PROMPT, DISCARDED TILE, PLAYER ACTION DONE)
+
 
 #### Error Codes
 

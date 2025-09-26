@@ -16,8 +16,9 @@ pub enum Seat {
     West = 3,
 }
 
+#[derive(PartialEq, Eq)]
 pub enum PlayerState {
-    IDLE,
+    WAITING,
     DRAW,
     DISCARD,
     READY,
@@ -57,7 +58,7 @@ impl Player {
             connected: Arc::new(RwLock::new(false)),
             id: Arc::new(RwLock::new(req.id.to_string())),
             alias: Arc::new(RwLock::new(req.alias.to_string())),
-            player_state: Arc::new(RwLock::new(PlayerState::IDLE)),
+            player_state: Arc::new(RwLock::new(PlayerState::WAITING)),
         }
     }
 
@@ -79,12 +80,16 @@ impl Player {
         serde_cbor::to_vec(&view).map_err(|_| Error::SerializationFailed(10))
     }
 
+    pub async fn check_ready(&self) -> bool {
+        return *self.player_state.read().await == PlayerState::READY;
+    }
+
     pub async fn set_ready(&self) {
         *self.player_state.write().await = PlayerState::READY;
     }
 
-    pub async fn set_idle(&self) {
-        *self.player_state.write().await = PlayerState::IDLE;
+    pub async fn set_waiting(&self) {
+        *self.player_state.write().await = PlayerState::WAITING;
     }
 }
 

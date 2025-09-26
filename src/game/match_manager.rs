@@ -127,18 +127,39 @@ impl MatchManager {
         if player_pool.len() != 4 {
             return Err(Error::MatchStartFailed(151));
         }
+
         player_pool
             .get(&Seat::East)
+            .ok_or(Error::MatchStartFailed(152))?
+            .check_ready()
+            .await
+            .then(|| 0)
             .ok_or(Error::MatchStartFailed(152))?;
+
         player_pool
             .get(&Seat::West)
+            .ok_or(Error::MatchStartFailed(153))?
+            .check_ready()
+            .await
+            .then(|| 0)
             .ok_or(Error::MatchStartFailed(153))?;
+
         player_pool
             .get(&Seat::North)
+            .ok_or(Error::MatchStartFailed(154))?
+            .check_ready()
+            .await
+            .then(|| 0)
             .ok_or(Error::MatchStartFailed(154))?;
+
         player_pool
             .get(&Seat::South)
+            .ok_or(Error::MatchStartFailed(155))?
+            .check_ready()
+            .await
+            .then(|| 0)
             .ok_or(Error::MatchStartFailed(155))?;
+
         Ok(())
     }
 

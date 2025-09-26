@@ -294,7 +294,7 @@ checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
 [[package]]
 name = "lolg"
 version = "0.1.0"
-source = "git+https://github.com/R-uan/lolg#00a5bf2505d6be9bd86a49ac56e241b0e6cdd5b1"
+source = "git+https://github.com/R-uan/lolg#5db485e25b2c889c8de0d70e9ec7a1c4aea6307e"
 dependencies = [
  "chrono",
  "thiserror",

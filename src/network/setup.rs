@@ -15,4 +15,13 @@ impl Setup {
             _ => None,
         }
     }
+
+    pub fn bytes(&self) -> [u8; 4] {
+        match self {
+            Self::Connection => [0x01, 0x00, 0x00, 0x00],
+            Self::Reconnection => [0x02, 0x00, 0x00, 0x00],
+            Self::Initialization => [0x03, 0x00, 0x00, 0x00],
+            Self::Ready => [0x04, 0x00, 0x00, 0x00],
+        }
+    }
 }
