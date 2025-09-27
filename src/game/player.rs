@@ -25,8 +25,8 @@ pub enum PlayerState {
 }
 
 pub struct Player {
+    pub id: u64,
     pub view: Arc<View>,
-    pub id: Arc<RwLock<String>>,
     pub seat: Arc<RwLock<Seat>>,
     pub alias: Arc<RwLock<String>>,
     pub connected: Arc<RwLock<bool>>,
@@ -53,10 +53,10 @@ impl View {
 impl Player {
     pub fn new(seat: Seat, req: &JoinRequest, hand: Vec<Arc<Tile>>) -> Player {
         Player {
+            id: req.id,
             view: Arc::new(View::new(hand)),
             seat: Arc::new(RwLock::new(seat)),
             connected: Arc::new(RwLock::new(false)),
-            id: Arc::new(RwLock::new(req.id.to_string())),
             alias: Arc::new(RwLock::new(req.alias.to_string())),
             player_state: Arc::new(RwLock::new(PlayerState::WAITING)),
         }

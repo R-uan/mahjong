@@ -61,8 +61,7 @@ impl Protocol {
 
     // Handles packets of the Connection kind.
     pub async fn handle_connect(&self, packet: &Packet) -> Result<Arc<Player>, Error> {
-        let req = serde_cbor::from_slice::<JoinRequest>(&packet.body[5..])
-            .map_err(|_| Error::ConnectionFailed(105))?;
+        let req = JoinRequest::parse(&packet.body[5..])?;
         let player = self.match_manager.assign_player(&req).await?;
         return Ok(player);
     }
@@ -75,8 +74,7 @@ impl Protocol {
 
     // Handles packets of the Reconnection kind.
     pub fn handle_reconnect(&self, packet: &Packet) -> Result<JoinRequest, Error> {
-        return serde_cbor::from_slice::<JoinRequest>(&packet.body[5..])
-            .map_err(|_| Error::ConnectionFailed(105));
+        return JoinRequest::parse(&packet.body[5..]);
     }
 }
 
@@ -92,11 +90,11 @@ impl Protocol {
             Ok(action) => {
                 let player = Arc::clone(&client.player);
                 match action.action {
-                    Action::KAN => {}
-                    Action::CHI => {}
-                    Action::TSUMO => {}
-                    Action::PON => {}
-                    Action::RON => {}
+                    Action::KAN => { todo!() }
+                    Action::CHI => { todo!() }
+                    Action::PON => { todo!() }
+                    Action::RON => { todo!() }
+                    Action::TSUMO => { todo!() }
                     Action::DISCARD => {
                         let response = match self.match_manager.discard(player, action).await {
                             Err(error) => Packet::error(p.id, error),

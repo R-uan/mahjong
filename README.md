@@ -45,6 +45,7 @@ the match status can change to ongoing and start the match.
 - 10 : Could not serialize initial player view.
 
 ##### Client Related Errors [51-100]
+- 54 : Client join request has invalid bytes.
 - 55 : Client not found on reconnection request
 - 56 : Client attempted an action before sending a connection packet.
 - 57 : Client's request's operation is not valid for his current state.
@@ -52,8 +53,6 @@ the match status can change to ongoing and start the match.
 ##### Protocol Related Errors [101-150]
 - 101 : Packet format is invalid and could not be parsed.
 - 102 : Packet kind is not valid.
-- 105 : Connection Failed (Invalid connection packet body)
-- 106 : Connection Failed ()
 
 ##### Game Related Errors [151-200]
 - 151 : Not all seats are occupied

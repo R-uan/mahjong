@@ -72,7 +72,7 @@ impl ClientManager {
                                             let _ = stream.send_packet(&response).await;
                                         }
                                         Ok(player) => {
-                                            let id = player.id.read().await.to_owned();
+                                            let id = player.id;
                                             let protocol = self.protocol.clone();
                                             let bcrx = protocol.bctx.subscribe();
                                             {
@@ -82,7 +82,7 @@ impl ClientManager {
                                                 self.logger.info(&log_msg).await;
                                             }
                                             let client = Client::new(
-                                                id.to_owned(),
+                                                id,
                                                 addr,
                                                 stream,
                                                 player,

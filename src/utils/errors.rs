@@ -4,9 +4,6 @@ pub enum Error {
     #[error("Failed to initialize server ({0})")]
     InitializationFailed(u16),
 
-    #[error("network error: failed to authenticate client ({0})")]
-    ConnectionFailed(u16),
-
     #[error("SERVER ERROR: ({0})")]
     SerializationFailed(u16),
 
@@ -19,6 +16,9 @@ pub enum Error {
 
     #[error("CLIENT ERROR ({0})")]
     OperationFailed(u16),
+
+    #[error("CLIENT ERROR ({0})")]
+    ConnectionFailed(u16),
 
     // Protocol Related Errors
     #[error("Could not parse received packet ({0})")]

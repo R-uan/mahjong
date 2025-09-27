@@ -11,7 +11,7 @@ use tokio::sync::{RwLock, broadcast};
 use tokio::time::sleep;
 
 pub struct Client {
-    pub id: String,
+    pub id: u64,
     pub player: Arc<Player>,
     pub protocol: Arc<Protocol>,
     pub listening: Arc<RwLock<bool>>,
@@ -23,7 +23,7 @@ pub struct Client {
 
 impl Client {
     pub async fn new(
-        id: String,
+        id: u64,
         addr: SocketAddr,
         stream: TcpStream,
         player: Arc<Player>,
