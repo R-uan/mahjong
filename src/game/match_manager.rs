@@ -14,17 +14,15 @@ use tokio::sync::{RwLock, watch};
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum MatchStatus {
     Waiting = 0,
-    Ready = 1,
+    Ongoing = 1,
     Finished = 2,
-    Ongoing = 3,
-    Interrupted = 4,
+    Interrupted = 3,
 }
 
 impl Display for MatchStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::Waiting => "Waiting",
-            Self::Ready => "Ready",
             Self::Finished => "Finished",
             Self::Ongoing => "Ongoing",
             Self::Interrupted => "Interrupted",
@@ -37,11 +35,10 @@ impl Display for MatchStatus {
 impl MatchStatus {
     pub fn bytes(&self) -> [u8; 4] {
         match &self {
-            Self::Ready => [0x01, 0x00, 0x00, 0x00],
             Self::Waiting => [0x00, 0x00, 0x00, 0x00],
-            Self::Ongoing => [0x03, 0x00, 0x00, 0x00],
+            Self::Ongoing => [0x01, 0x00, 0x00, 0x00],
             Self::Finished => [0x02, 0x00, 0x00, 0x00],
-            Self::Interrupted => [0x04, 0x00, 0x00, 0x00],
+            Self::Interrupted => [0x03, 0x00, 0x00, 0x00],
         }
     }
 }
@@ -59,7 +56,7 @@ pub struct MatchManager {
 }
 
 impl MatchManager {
-    pub async fn next_player(&self) -> Result<Arc<Player>, Error> {
+    pub async fn next_turn(&self) -> Result<Arc<Player>, Error> {
         let mut guard = self.current_turn.write().await;
         let next_seat = match *guard {
             Seat::East => Seat::North,
@@ -70,6 +67,8 @@ impl MatchManager {
 
         *guard = next_seat;
         if let Some(player) = self.state.player_pool.read().await.get(&next_seat) {
+            let mut turn_guard = self.state.turn.write().await;
+            *turn_guard += 1;
             return Ok(Arc::clone(player));
         }
         return Err(Error::NextPlayerFailed);
@@ -97,14 +96,14 @@ impl MatchManager {
         return Ok(tile_clone);
     }
 
-    pub async fn discard(&self, player: Arc<Player>, action: GameAction) -> Result<bool, Error> {
+    pub async fn discard(&self, player: Arc<Player>, action: GameAction) -> Result<Tile, Error> {
         if *self.current_turn.read().await != *player.seat.read().await {
             return Err(Error::DiscardFailed(165));
         }
 
         let tile = action.target.ok_or(Error::TileParsingFailed)?;
         match player.discard_tile(&tile).await {
-            true => return Ok(true),
+            true => return Ok(tile),
             false => return Err(Error::DiscardFailed(164)),
         };
     }
@@ -163,16 +162,17 @@ impl MatchManager {
         Ok(())
     }
 
-    pub async fn check_ready(&self) {
-        let log_msg = match self.check_seats().await {
-            Err(error) => format!("Match is not ready yet: {error}."),
-            Ok(_) => {
-                self.change_status(MatchStatus::Ready).await;
-                format!("Match is ready for initialization.")
-            }
+    pub async fn check_ready(&self) -> bool {
+        let Err(error) = self.check_seats().await else {
+            self.logger
+                .debug(&format!("Match is ready for initialization."))
+                .await;
+            return true;
         };
-
-        self.logger.debug(&log_msg).await;
+        self.logger
+            .debug(&format!("Match is not ready yet: {error}."))
+            .await;
+        return false;
     }
 
     async fn change_status(&self, status: MatchStatus) {

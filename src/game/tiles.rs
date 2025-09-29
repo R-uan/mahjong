@@ -137,7 +137,7 @@ impl Display for TileKind {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Copy, Clone)]
 pub struct Tile {
     pub kind: TileKind,
     pub copy: u8, // 0-3

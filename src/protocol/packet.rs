@@ -7,41 +7,29 @@ use crate::utils::errors::Error;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum PacketKind {
-    Ping = 0,
     Setup = 1,
-    GameAction = 2,
-    ActionDone = 3,
-    ActionFail = 4,
-    Error = 5,
-    MatchStatus = 6,
-    Pong = 7,
+    Action = 2,
+    Broadcast = 3,
+    Error = 255,
 }
 
 impl PacketKind {
     pub fn from_byte(byte: u32) -> Option<Self> {
         match byte as i32 {
-            0 => Some(Self::Ping),
             1 => Some(Self::Setup),
-            2 => Some(Self::GameAction),
-            3 => Some(Self::ActionDone),
-            4 => Some(Self::ActionFail),
-            5 => Some(Self::Error),
-            6 => Some(Self::MatchStatus),
-            7 => Some(Self::Pong),
+            2 => Some(Self::Action),
+            3 => Some(Self::Broadcast),
+            255 => Some(Self::Error),
             _ => None,
         }
     }
 
     pub fn bytes(&self) -> [u8; 4] {
         match self {
-            PacketKind::Ping => [0x00, 0x00, 0x00, 0x00],
             PacketKind::Setup => [0x01, 0x00, 0x00, 0x00],
-            PacketKind::GameAction => [0x02, 0x00, 0x00, 0x00],
-            PacketKind::ActionDone => [0x03, 0x00, 0x00, 0x00],
-            PacketKind::ActionFail => [0x04, 0x00, 0x00, 0x00],
+            PacketKind::Action => [0x02, 0x00, 0x00, 0x00],
             PacketKind::Error => [0x05, 0x00, 0x00, 0x00],
-            PacketKind::MatchStatus => [0x06, 0x00, 0x00, 0x00],
-            PacketKind::Pong => [0x07, 0x00, 0x00, 0x00],
+            PacketKind::Broadcast => [0x03, 0x00, 0x00, 0x00],
         }
     }
 }
@@ -138,12 +126,12 @@ mod tests {
     #[test]
     fn from_bytes() {
         let bytes = [
-            0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, 0x68, 0x65,
+            0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, 0x68, 0x65,
             0x6C, 0x6C, 0x6F, 0x00, 0x00,
         ];
 
         if let Ok(packet) = Packet::from_bytes(&bytes) {
-            assert_eq!(packet.kind, PacketKind::Ping);
+            assert_eq!(packet.kind, PacketKind::Broadcast);
             assert_eq!(packet.size, 15);
             assert_eq!(packet.id, 1);
             let body = String::from_utf8(packet.body.to_vec()).unwrap();

@@ -10,7 +10,11 @@ use crate::{
     },
     network::{client::Client, setup::Setup},
     protocol::packet::{Packet, PacketKind},
-    utils::{errors::Error, models::JoinRequest, types::ClientPool},
+    utils::{
+        errors::Error,
+        models::{Discard, JoinRequest},
+        types::ClientPool,
+    },
 };
 
 pub struct Protocol {
@@ -46,10 +50,8 @@ impl Protocol {
     pub async fn handle_packet(self: Arc<Self>, client: Arc<Client>, packet: Packet) {
         tokio::spawn(async move {
             match packet.kind {
-                PacketKind::Ping => self.handle_ping(client, &packet).await,
-                PacketKind::Pong => {}
                 PacketKind::Setup => self.handle_setup(client, &packet).await,
-                PacketKind::GameAction => self.handle_action(client.clone(), &packet).await,
+                PacketKind::Action => self.handle_action(client.clone(), &packet).await,
                 _ => {
                     let error = Error::PacketParsingFailed(102);
                     let packet = Packet::error(packet.id, error);
@@ -90,21 +92,34 @@ impl Protocol {
             Ok(action) => {
                 let player = Arc::clone(&client.player);
                 match action.action {
-                    Action::KAN => { todo!() }
-                    Action::CHI => { todo!() }
-                    Action::PON => { todo!() }
-                    Action::RON => { todo!() }
-                    Action::TSUMO => { todo!() }
+                    Action::DRAW => {
+                        todo!()
+                    }
+                    Action::KAN => {
+                        todo!()
+                    }
+                    Action::CHI => {
+                        todo!()
+                    }
+                    Action::PON => {
+                        todo!()
+                    }
+                    Action::RON => {
+                        todo!()
+                    }
+                    Action::TSUMO => {
+                        todo!()
+                    }
                     Action::DISCARD => {
                         let response = match self.match_manager.discard(player, action).await {
                             Err(error) => Packet::error(p.id, error),
-                            Ok(result) => match result {
-                                true => Packet::create(p.id, PacketKind::ActionDone, &p.body),
-                                false => Packet::create(p.id, PacketKind::ActionFail, &p.body),
-                            },
+                            Ok(tile) => {
+                                let player_id = client.player.id;
+                                let id = self.get_global_id().await;
+                                Discard::broadcast(id, player_id, tile)
+                            }
                         };
-
-                        client.send_packet(&response).await;
+                        let _ = self.bctx.send(response);
                     }
                 };
             }
@@ -151,12 +166,6 @@ impl Protocol {
         client.send_packet(&response).await;
     }
 
-    async fn handle_ping(&self, client: Arc<Client>, packet: &Packet) {
-        let pong = "Pong!".as_bytes();
-        let response = Packet::create(packet.id, PacketKind::Ping, pong);
-        client.send_packet(&response).await;
-    }
-
     // Spawns a task to watch the changes from the match status and deal with each respective status.
     async fn watch_match_status(self: Arc<Self>) {
         let bctx = self.bctx.clone();
@@ -166,16 +175,6 @@ impl Protocol {
                 loop {
                     let status = *mmrx.borrow();
                     match &status {
-                        MatchStatus::Ready => {
-                            let kind = PacketKind::MatchStatus;
-                            let body = MatchStatus::Ready.bytes();
-                            let mut id = self.global_id.lock().await;
-                            let packet = Packet::create(*id, kind, &body);
-                            *id += 1;
-                            drop(id);
-                            let _ = bctx.send(packet);
-                            self.logger.debug(&format!("STATUS CHANGE: {status}")).await;
-                        }
                         MatchStatus::Waiting => {}
                         MatchStatus::Finished => {}
                         MatchStatus::Ongoing => {}

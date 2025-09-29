@@ -25,7 +25,7 @@ pub enum PlayerState {
 }
 
 pub struct Player {
-    pub id: u64,
+    pub id: i32,
     pub view: Arc<View>,
     pub seat: Arc<RwLock<Seat>>,
     pub alias: Arc<RwLock<String>>,

@@ -1,6 +1,9 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     // Server Related Errors
+    #[error("Internal Error (255)")]
+    InternalError,
+
     #[error("Failed to initialize server ({0})")]
     InitializationFailed(u16),
 

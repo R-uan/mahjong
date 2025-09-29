@@ -1,10 +1,17 @@
 use serde::{Deserialize, Serialize};
 
-use crate::utils::errors::Error;
+use crate::{
+    game::{
+        game_action::Action,
+        tiles::{Tile, TileKind},
+    },
+    protocol::packet::{Packet, PacketKind},
+    utils::errors::Error,
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct JoinRequest {
-    pub id: u64,
+    pub id: i32,
     pub alias: String,
 }
 
@@ -15,7 +22,7 @@ impl JoinRequest {
             .ok_or(Error::ConnectionFailed(54))?
             .try_into()
             .ok()
-            .map(u64::from_le_bytes)
+            .map(i32::from_le_bytes)
             .ok_or(Error::ConnectionFailed(54))?;
         let alias_bytes = bytes.get(8..).ok_or(Error::ConnectionFailed(54))?;
         let alias =
@@ -36,5 +43,57 @@ mod tests {
         let parse = JoinRequest::parse(bytes);
         assert!(parse.is_ok());
         assert_eq!(parse.unwrap().alias, "Bunny");
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Discard {
+    pub player_id: i32,
+    pub tile_kind: TileKind,
+    pub tile_copy: u8,
+}
+
+impl Discard {
+    pub fn broadcast(id: i32, pid: i32, target: Tile) -> Packet {
+        let broadcast = Discard {
+            player_id: pid,
+            tile_kind: target.kind,
+            tile_copy: target.copy,
+        };
+        match serde_cbor::to_vec(&broadcast) {
+            Err(_) => Packet::error(id, Error::InternalError),
+            Ok(bytes) => {
+                let mut body: Vec<u8> = Vec::new();
+                body.extend_from_slice(&Action::DISCARD.bytes());
+                body.extend_from_slice(&bytes);
+                Packet::create(id, PacketKind::Broadcast, &body.into_boxed_slice())
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Draw {
+    pub player_id: i32,
+    pub tile_kind: TileKind,
+    pub tile_copy: u8,
+}
+
+impl Draw {
+    pub fn broadcast(id: i32, pid: i32, target: Tile) -> Packet {
+        let broadcast = Discard {
+            player_id: pid,
+            tile_kind: target.kind,
+            tile_copy: target.copy,
+        };
+        match serde_cbor::to_vec(&broadcast) {
+            Err(_) => Packet::error(id, Error::InternalError),
+            Ok(bytes) => {
+                let mut body: Vec<u8> = Vec::new();
+                body.extend_from_slice(&Action::DISCARD.bytes());
+                body.extend_from_slice(&bytes);
+                Packet::create(id, PacketKind::Broadcast, &body.into_boxed_slice())
+            }
+        }
     }
 }
