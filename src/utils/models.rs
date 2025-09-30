@@ -1,10 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    game::{
-        game_action::Action,
-        tiles::{Tile, TileKind},
-    },
+    game::enums::{Action, Tile, TileKind},
     protocol::packet::{Packet, PacketKind},
     utils::errors::Error,
 };
@@ -49,8 +46,8 @@ mod tests {
 #[derive(Serialize, Deserialize)]
 pub struct Discard {
     pub player_id: i32,
-    pub tile_kind: TileKind,
     pub tile_copy: u8,
+    pub tile_kind: TileKind,
 }
 
 impl Discard {
@@ -95,5 +92,26 @@ impl Draw {
                 Packet::create(id, PacketKind::Broadcast, &body.into_boxed_slice())
             }
         }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MeldFlags {
+    pub pid: i32,
+    pub ron: bool,
+    pub pon: bool,
+    pub chi: bool,
+    pub kan: bool,
+}
+
+impl MeldFlags {
+    pub fn create(pid: i32, flags: mlua::Table) -> Result<Self, Error> {
+        Ok(Self {
+            pid,
+            chi: flags.get("chi").map_err(|_| Error::InternalError)?,
+            pon: flags.get("pon").map_err(|_| Error::InternalError)?,
+            kan: flags.get("kan").map_err(|_| Error::InternalError)?,
+            ron: flags.get("ron").map_err(|_| Error::InternalError)?,
+        })
     }
 }

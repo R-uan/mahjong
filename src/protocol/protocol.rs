@@ -1,10 +1,11 @@
 use lolg::Lolg;
-use std::sync::Arc;
+use std::{collections::hash_map::IntoKeys, sync::Arc};
 use tokio::sync::{Mutex, broadcast, watch};
 
 use crate::{
     game::{
-        game_action::{Action, GameAction},
+        enums::Action,
+        game_action::GameAction,
         match_manager::{MatchManager, MatchStatus},
         player::Player,
     },
@@ -28,10 +29,10 @@ pub struct Protocol {
 
 // PUBLIC METHODS
 impl Protocol {
-    pub async fn new(log_manager: Arc<Lolg>, client_pool: ClientPool) -> Arc<Self> {
+    pub async fn new(log_manager: Arc<Lolg>, client_pool: ClientPool) -> Result<Arc<Self>, Error> {
         let (bctx, _rx) = broadcast::channel::<Packet>(4);
         let (mmtx, mmrx) = watch::channel(MatchStatus::Waiting);
-        let match_manager = MatchManager::new(log_manager.clone(), mmtx);
+        let match_manager = MatchManager::new(log_manager.clone(), mmtx).await?;
 
         let protocol = Arc::new(Self {
             mmrx,
@@ -43,7 +44,7 @@ impl Protocol {
         });
 
         Arc::clone(&protocol).watch_match_status().await;
-        return protocol;
+        return Ok(protocol);
     }
 
     // Spawns a task to handle a packet based on its PacketKind and currently directly sends a response.
@@ -93,7 +94,31 @@ impl Protocol {
                 let player = Arc::clone(&client.player);
                 match action.action {
                     Action::DRAW => {
-                        todo!()
+                        let response = match self.match_manager.draw(player).await {
+                            Err(error) => {
+                                self.logger.error(&error.to_string()).await;
+                                Packet::error(p.id, error)
+                            }
+                            Ok(tile) => match serde_cbor::to_vec(&tile) {
+                                Err(_) => {
+                                    let error = Error::InternalError;
+                                    self.logger.error(&error.to_string()).await;
+                                    Packet::error(p.id, error)
+                                }
+                                Ok(bytes) => {
+                                    let mut body = Vec::new();
+                                    body.extend_from_slice(&Action::DRAW.bytes());
+                                    body.extend_from_slice(&bytes);
+                                    Packet::create(
+                                        p.id,
+                                        PacketKind::Action,
+                                        &body.into_boxed_slice(),
+                                    )
+                                }
+                            },
+                        };
+
+                        client.send_packet(&response).await;
                     }
                     Action::KAN => {
                         todo!()
@@ -111,15 +136,34 @@ impl Protocol {
                         todo!()
                     }
                     Action::DISCARD => {
-                        let response = match self.match_manager.discard(player, action).await {
-                            Err(error) => Packet::error(p.id, error),
+                        match self.match_manager.discard(player, action).await {
+                            Err(error) => {
+                                let response = Packet::error(p.id, error);
+                                client.send_packet(&response).await;
+                            }
                             Ok(tile) => {
-                                let player_id = client.player.id;
-                                let id = self.get_global_id().await;
-                                Discard::broadcast(id, player_id, tile)
+                                let Ok(melds) = self.match_manager.check_calls(tile).await else {
+                                    let id = self.get_global_id().await;
+                                    let error = Error::InternalError;
+                                    let response = Packet::error(id, error);
+                                    let _ = self.bctx.send(response);
+                                    return;
+                                };
+
+                                let client_pool = self.client_pool.read().await;
+                                for key in melds.keys() {
+                                    let client = client_pool.get(key).unwrap();
+                                    let meld = melds.get(key).unwrap();
+
+                                    let id = self.get_global_id().await;
+                                    let mut body = Vec::new();
+                                    body.extend_from_slice(&Action::DISCARD.bytes());
+                                    body.extend_from_slice(&meld);
+                                    let response = Packet::create(id, PacketKind::Action, &body);
+                                    client.send_packet(&response).await;
+                                }
                             }
                         };
-                        let _ = self.bctx.send(response);
                     }
                 };
             }

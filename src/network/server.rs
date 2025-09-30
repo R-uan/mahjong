@@ -23,7 +23,7 @@ impl Server {
             .map_err(|_| Error::InitializationFailed(5))?;
 
         Arc::clone(&lolg).listen().await;
-        let cm = ClientManager::new(Arc::clone(&lolg)).await;
+        let cm = ClientManager::new(Arc::clone(&lolg)).await?;
 
         let server = Server {
             running: Arc::clone(&lolg.running),

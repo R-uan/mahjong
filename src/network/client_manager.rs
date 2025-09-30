@@ -19,14 +19,14 @@ pub struct ClientManager {
 }
 
 impl ClientManager {
-    pub async fn new(logger: Arc<Lolg>) -> Self {
+    pub async fn new(logger: Arc<Lolg>) -> Result<Self, Error> {
         let client_pool: ClientPool = Arc::new(RwLock::new(HashMap::default()));
-        let protocol = Protocol::new(Arc::clone(&logger), Arc::clone(&client_pool)).await;
-        Self {
+        let protocol = Protocol::new(Arc::clone(&logger), Arc::clone(&client_pool)).await?;
+        Ok(Self {
             logger,
             protocol,
             client_pool: Arc::new(RwLock::new(HashMap::default())),
-        }
+        })
     }
 
     // Handles the initial client state (unauthenticated)
@@ -82,12 +82,7 @@ impl ClientManager {
                                                 self.logger.info(&log_msg).await;
                                             }
                                             let client = Client::new(
-                                                id,
-                                                addr,
-                                                stream,
-                                                player,
-                                                protocol,
-                                                bcrx,
+                                                id, addr, stream, player, protocol, bcrx,
                                             )
                                             .await;
 

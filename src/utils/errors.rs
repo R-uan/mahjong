@@ -10,6 +10,9 @@ pub enum Error {
     #[error("SERVER ERROR: ({0})")]
     SerializationFailed(u16),
 
+    #[error("SCRIPTS FAILED ({0})")]
+    ScriptingFailed(u16),
+
     // Client Related Errors
     #[error("CLIENT ERROR ({0})")]
     ReconnectionFailed(u16),

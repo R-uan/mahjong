@@ -35,7 +35,7 @@ the match status can change to ongoing and start the match.
 - ~~Finish the MatchManager > Protocol communication~~
 - Figure out how to quickstart the match
 - Create Server's game actions (TURN CHANGE, PLAYER ACTION PROMPT, DISCARDED TILE, PLAYER ACTION DONE)
-
+- Create discard overview in matchmanager so you can use the script to check what is availale to each player with the new dicarded tile. The result should be a individual report that the protocol will send out
 
 #### Error Codes
 

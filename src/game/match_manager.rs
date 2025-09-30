@@ -1,47 +1,19 @@
 use crate::{
     game::{
+        enums::{Seat, Tile},
         game_action::GameAction,
         game_state::GameState,
-        player::{Player, Seat},
-        tiles::Tile,
+        lua_manager::LuaManager,
+        player::Player,
     },
-    utils::{errors::Error, models::JoinRequest},
+    utils::{
+        errors::Error,
+        models::{JoinRequest, MeldFlags},
+    },
 };
 use lolg::Lolg;
-use std::{fmt::Display, sync::Arc};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 use tokio::sync::{RwLock, watch};
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum MatchStatus {
-    Waiting = 0,
-    Ongoing = 1,
-    Finished = 2,
-    Interrupted = 3,
-}
-
-impl Display for MatchStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            Self::Waiting => "Waiting",
-            Self::Finished => "Finished",
-            Self::Ongoing => "Ongoing",
-            Self::Interrupted => "Interrupted",
-        };
-
-        write!(f, "{}", s)
-    }
-}
-
-impl MatchStatus {
-    pub fn bytes(&self) -> [u8; 4] {
-        match &self {
-            Self::Waiting => [0x00, 0x00, 0x00, 0x00],
-            Self::Ongoing => [0x01, 0x00, 0x00, 0x00],
-            Self::Finished => [0x02, 0x00, 0x00, 0x00],
-            Self::Interrupted => [0x03, 0x00, 0x00, 0x00],
-        }
-    }
-}
 
 // RULES FOR THIS MANAGER
 // - IT SHOULD NOT HAVE TO CREATE ANY PACKETS AS IT HAS NO DIRECT ACCESS TO PROTOCOL
@@ -49,6 +21,7 @@ impl MatchStatus {
 pub struct MatchManager {
     match_id: String,
     logger: Arc<Lolg>,
+    lua: Arc<LuaManager>,
     pub state: Arc<GameState>,
     current_turn: Arc<RwLock<Seat>>,
     pub status: Arc<RwLock<MatchStatus>>,
@@ -79,7 +52,7 @@ impl MatchManager {
             return Err(Error::DrawFailed(163));
         }
 
-        let mut hand = player.view.hand.write().await;
+        let mut hand = player.hand.write().await;
         if hand.len() >= 14 {
             return Err(Error::DrawFailed(161));
         }
@@ -107,18 +80,58 @@ impl MatchManager {
             false => return Err(Error::DiscardFailed(164)),
         };
     }
+
+    pub async fn check_calls(&self, tile: Tile) -> Result<HashMap<i32, Vec<u8>>, Error> {
+        let state = self
+            .lua
+            .lua
+            .create_table()
+            .map_err(|_| Error::InternalError)?;
+        let players = self.state.player_pool.read().await;
+
+        state
+            .set("tile", tile.kind as i8)
+            .map_err(|_| Error::InternalError)?;
+
+        for seat in [Seat::North, Seat::South, Seat::East, Seat::West] {
+            let player = players.get(&seat).unwrap();
+            let hand = player.get_hand().await;
+            let table = self.lua.vec_to_luatable(&hand)?;
+            state
+                .set(seat.to_string(), table)
+                .map_err(|_| Error::InternalError)?;
+        }
+
+        let check_result = self.lua.check_calls(state).await?;
+        let mut flags: HashMap<i32, Vec<u8>> = HashMap::new();
+        for seat in [Seat::North, Seat::South, Seat::East, Seat::West] {
+            let melds: mlua::Table = check_result
+                .get(seat.to_string())
+                .map_err(|_| Error::InternalError)?;
+            let player = players.get(&seat).unwrap();
+            let meld_flags = MeldFlags::create(player.id, melds)?;
+            let meld_bytes = serde_cbor::to_vec(&meld_flags).map_err(|_| Error::InternalError)?;
+            flags.insert(player.id, meld_bytes);
+        }
+
+        return Ok(flags);
+    }
 }
 
 impl MatchManager {
-    pub fn new(log_manager: Arc<Lolg>, sender: watch::Sender<MatchStatus>) -> MatchManager {
-        Self {
+    pub async fn new(
+        log_manager: Arc<Lolg>,
+        sender: watch::Sender<MatchStatus>,
+    ) -> Result<Self, Error> {
+        Ok(Self {
             logger: log_manager,
-            match_id: String::new(),
             sttx: Arc::new(sender),
+            match_id: String::new(),
+            lua: Arc::new(LuaManager::new().await?),
             state: Arc::new(GameState::start_game()),
             current_turn: Arc::new(RwLock::new(Seat::East)),
             status: Arc::new(RwLock::new(MatchStatus::Waiting)),
-        }
+        })
     }
 
     async fn check_seats(&self) -> Result<(), Error> {
@@ -214,5 +227,33 @@ impl MatchManager {
                 return Ok(player);
             }
         }
+    }
+}
+
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum MatchStatus {
+    Waiting = 0,
+    Ongoing = 1,
+    Finished = 2,
+    Interrupted = 3,
+}
+
+impl MatchStatus {
+    pub fn bytes(&self) -> [u8; 4] {
+        (*self as u32).to_le_bytes()
+    }
+}
+
+impl Display for MatchStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Waiting => "Waiting",
+            Self::Finished => "Finished",
+            Self::Ongoing => "Ongoing",
+            Self::Interrupted => "Interrupted",
+        };
+
+        write!(f, "{}", s)
     }
 }

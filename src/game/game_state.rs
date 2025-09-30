@@ -2,8 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 use crate::game::{
-    player::{Player, Seat},
-    tiles::{Tile, TileKind},
+    enums::{Seat, Tile, TileKind},
+    player::Player,
 };
 
 pub struct GameState {
